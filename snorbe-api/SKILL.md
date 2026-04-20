@@ -63,6 +63,8 @@ curl "https://app.snorbe.deskrex.ai/api/v1/agent/list" \
 | レジューム | `POST /agent/run/stream/{runId}` | [reference/agent-streaming.md](reference/agent-streaming.md) |
 | HITL 応答（plan/report/matrix） | `POST /agent/run/{runId}/{plan\|report\|matrix}/{answer\|confirm}` | [reference/agent-streaming.md](reference/agent-streaming.md) |
 | 利用可能なモデル一覧 | `GET /agent/models` | [モデル選択](#モデル選択) |
+| 利用可能なツール一覧 | `GET /agent/tools` | [capabilities.md#ツール一覧-api](capabilities.md#ツール一覧-api) |
+| 有効化済みカスタムスキル一覧 | `GET /skill/list` | [capabilities.md#カスタムスキル一覧-api](capabilities.md#カスタムスキル一覧-api) |
 | ワークスペース | `GET /workspace` | [reference/workspace.md](reference/workspace.md) |
 | エージェント管理 | `GET/POST/PATCH/DELETE /agent[/{id}]` | [reference/workspace.md](reference/workspace.md) |
 | グラフ取得 | `GET /graph/*` | [reference/graph.md](reference/graph.md) |

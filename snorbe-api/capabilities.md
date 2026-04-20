@@ -23,124 +23,299 @@
 
 プロンプト設計で挙動を狙う方法は [prompting.md](prompting.md) 参照。
 
-## ツール一覧（22種）
+## ツール一覧 API
 
-### 情報収集系（6種）
+実行時に最新のツール定義を取得するには `GET /agent/tools` を呼ぶ（認証不要）。
+このドキュメントのハードコードされた一覧よりも **API の返値が正**。
 
-#### `search` — Web 検索
-**トリガ**: 単一対象の調査、時系列要素（latest/recent）がある。
-**内部動作**: `generate-search-queries` → SERP → `select-serp` → スクレイプ → 要約。
-**関連 SSE イベント**:
-```
-search-query-generation-start / search-query-generated
-search-results / search-image-results / search-selection
-search-scraping / search-summary-start / search-summary-delta / search-summary-complete
+```bash
+curl "https://app.snorbe.deskrex.ai/api/v1/agent/tools"
 ```
 
-#### `x_search` — X（Twitter）検索
-**トリガ**: 「X で」「Twitter で」を明示。SNS 反応が必要な場合。
-**入力**: `query`, `fromDate`, `toDate`, `xHandles`（指定アカウント）。
-**関連 SSE**: `x-search-start` / `x-search-summary-delta` / `x-search-result`
+レスポンス（抜粋）:
 
-#### `source_summary` — URL/ファイル要約
-**トリガ**: `inputText` 中に URL。`fileUrls[]` にファイル指定あり。
-**入力**: `urls[]`。キャッシュ状態・エラーも返す。
-**関連 SSE**: `source-summary-start` / `source-summary-delta` / `source-summary-item` / `source-summary-complete`
-
-#### `browse` — ブラウザ自動化
-**トリガ**: ビジュアル確認が必要、ログイン、複雑な Web 操作。
-**特徴**: スクリーンショット付き、ユーザーへの質問可能（`browse-ask-human`）。
-**関連 SSE**:
-```
-browse-start（websocketInfo 含む）
-browse-step（action・screenshot）
-browse-ask-human（status:"pending", question）
-browse-final（結果） / browse-end
-```
-
-`browse-ask-human` 受信時は `/browser/answer-question` に回答。その後レジューム不要。
-
-#### `extract_related_urls` — サイト構造抽出
-**トリガ**: 「サイトマップ」「リンク全部」等。
-**入力**: `urls[]`。重複排除とトリミング適用。
-**関連 SSE**: `extract-related-urls-start` / `extract-related-urls-progress` / `extract-related-urls-complete`
-
-#### `recall` — RAG 検索（ワークスペース内）
-**トリガ**: 「過去の」「前回の」「既存資料で」。
-**モード**: `similarity` / `knowledge_gap` / `catalog`。`targetEntities[]` で絞り込み可能。
-**関連 SSE**:
-```
-rag-keyword-extraction-start / rag-keyword-extraction-complete
-rag-entity-search-progress
-rag-knowledge-gap-start / rag-knowledge-gap-progress / rag-knowledge-gap-complete / rag-knowledge-gap-merge
-rag-catalog-recall-start / rag-catalog-recall-progress / rag-catalog-recall-complete / rag-catalog-recall-merge
-rag-source-pre-filter / rag-source-search-progress
-rag-context-complete
+```json
+{
+  "tools": [
+    {
+      "id": "search",
+      "displayName": "Web Search",
+      "category": "research",
+      "description": "General web search with query generation, SERP selection, scraping, and summary."
+    },
+    {
+      "id": "plan",
+      "displayName": "Plan",
+      "category": "generation",
+      "description": "Draft a multi-step research plan for human review before executing the full workflow."
+    }
+  ]
+}
 ```
 
-### 複合調査・計画系（3種・HITL）
+`category` は `research` / `generation` / `hitl` / `agent_integration` / `internal` のいずれか。
 
-#### `plan` — リサーチ計画の HITL 確認
-**トリガ**: 複数ステップ、試行錯誤が必要、検索+レポート組み合わせ。
-**フロー**:
-```
-1. planTool → first-plan イベント（ドラフト + 質問）
-2. ユーザー応答: regenerate_plan / confirm_plan / abort_plan
-3. confirm 後、Plan Mode 起動（検索・ブラウズ許可）
-```
-**関連 SSE**: `first-plan` / `regenerated-plan` / `plan-confirmed` / `plan-rejected` / `user-answer` / `plan-draft-delta` / `plan-draft-complete`
+ツールメタ（`displayName` / `category` / `description` / `trigger` / `flow` / `sseEvents` など）の正本は**各ツール実装ファイル側**。例: `search` なら `features/agent-run/api/tools/search-tool.ts` の `searchToolMeta`、`plan` なら `plan-tool.ts` の `planToolMeta`。`tool-catalog.ts` はこれらを `Record<ToolName, ToolCatalogEntry>` で集約するレジストリで、`TOOL_NAMES` に定義されたツールが全て揃っていないと型エラーになる。下記の「ツール一覧」セクションはこのレジストリから自動生成される。
 
-#### `report` — 構造化レポートの HITL 生成
-**トリガ**: 長文ドキュメント、報告書、原稿。
-**フロー**:
+## カスタムスキル一覧 API
+
+ワークスペースで有効化（またはインストール）されているカスタムスキルを取得するには `GET /skill/list`（API キー必須）。
+
+```bash
+curl "https://app.snorbe.deskrex.ai/api/v1/skill/list" \
+  -H "Authorization: Bearer $SNORBE_API_KEY"
 ```
-1. reportTool → first_report_structure（セクション配列 + 質問）
+
+レスポンス例:
+
+```json
+[
+  {
+    "id": "cl123abc",
+    "name": "Patent Search",
+    "description": "Patent search workflow",
+    "enabled": true,
+    "isOfficial": false
+  }
+]
+```
+
+`storagePath` など内部実装の識別子はレスポンスに含まれない。エージェントに「どのスキルが使えるか」を事前に把握させたい場合や、UI にバッジを出したい場合に使う。
+
+## ツール一覧（全 28 種）
+
+下記はツール実装ファイル内の `xxxToolMeta` 定数から自動生成される。手動編集は不要で、各ツールファイル（例: `features/agent-run/api/tools/search-tool.ts`）の meta を更新し `pnpm gen:tool-list` を実行すれば再生成される。
+
+<!-- AUTOGEN:tool-catalog:START -->
+### research (6)
+
+#### `search` — Web Search
+
+General web search with query generation, SERP selection, scraping, and summary.
+
+**Trigger**: Single-target investigation or queries that include a latest/recent time dimension.
+
+**Flow**:
+1. generate-search-queries
+2. SERP
+3. select-serp
+4. scrape
+5. summarize
+
+**SSE events**:
+`search-query-generation-start` / `search-query-generated` / `search-results` / `search-image-results` / `search-selection` / `search-scraping` / `search-summary-start` / `search-summary-delta` / `search-summary-complete`
+
+#### `x_search` — X Search
+
+Search posts on X (Twitter) with optional date range and account filters.
+
+**Trigger**: 「X で」「Twitter で」を明示。SNS 反応が必要な場合。
+
+**Inputs**: query, fromDate, toDate, xHandles (指定アカウント)
+
+**SSE events**:
+`x-search-start` / `x-search-summary-delta` / `x-search-result`
+
+#### `browse` — Browser Automation
+
+Automate a browser for logins, complex interactions, and screenshot-based verification.
+
+**Trigger**: ビジュアル確認が必要、ログイン、複雑な Web 操作。
+
+**SSE events**:
+`browse-start` / `browse-step` / `browse-ask-human` / `browse-final` / `browse-end`
+
+**Notes**: `browse-ask-human` 受信時は `/browser/answer-question` に回答。その後レジューム不要。スクリーンショット付き。
+
+#### `source_summary` — Source Summary
+
+Summarize one or more URLs or uploaded files with caching and error reporting.
+
+**Trigger**: inputText 中に URL。fileUrls[] にファイル指定あり。
+
+**Inputs**: urls[]。キャッシュ状態・エラーも返す。
+
+**SSE events**:
+`source-summary-start` / `source-summary-delta` / `source-summary-item` / `source-summary-complete`
+
+#### `extract_related_urls` — Extract Related URLs
+
+Discover related URLs from a site, deduplicated and trimmed.
+
+**Trigger**: 「サイトマップ」「リンク全部」等。
+
+**Inputs**: urls[]。重複排除とトリミング適用。
+
+**SSE events**:
+`extract-related-urls-start` / `extract-related-urls-progress` / `extract-related-urls-complete`
+
+#### `recall` — Recall
+
+Retrieve prior knowledge from the workspace via similarity, knowledge-gap, or catalog recall.
+
+**Trigger**: 「過去の」「前回の」「既存資料で」。
+
+**Inputs**: targetEntities[] で絞り込み可能。
+
+**Modes**: `similarity` / `knowledge_gap` / `catalog`
+
+**SSE events**:
+`rag-keyword-extraction-start` / `rag-keyword-extraction-complete` / `rag-entity-search-progress` / `rag-knowledge-gap-start` / `rag-knowledge-gap-progress` / `rag-knowledge-gap-complete` / `rag-knowledge-gap-merge` / `rag-catalog-recall-start` / `rag-catalog-recall-progress` / `rag-catalog-recall-complete` / `rag-catalog-recall-merge` / `rag-source-pre-filter` / `rag-source-search-progress` / `rag-context-complete`
+
+### generation (5)
+
+#### `plan` — Plan
+
+Draft a multi-step research plan for human review before executing the full workflow.
+
+**Trigger**: 複数ステップ、試行錯誤が必要、検索+レポート組み合わせ。
+
+**Flow**:
+1. planTool → first-plan event (draft + questions)
+2. user responds: regenerate_plan / confirm_plan / abort_plan
+3. after confirm, Plan Mode starts (search/browse enabled)
+
+**SSE events**:
+`first-plan` / `regenerated-plan` / `plan-confirmed` / `plan-rejected` / `user-answer` / `plan-draft-delta` / `plan-draft-complete`
+
+#### `report` — Report
+
+Generate a structured long-form report through a draft → confirmation → section writing flow.
+
+**Trigger**: 長文ドキュメント、報告書、原稿。
+
+**Flow**:
+1. reportTool → first_report_structure (sections + questions)
 2. regenerate / confirm / abort
-3. confirm 後、各セクションを recall + generate_report_section で順次執筆
-```
-**関連 SSE**: `first_report_structure` / `regenerated_report_structure` / `report_structure_confirmed` / `report_structure_rejected` / `report-structure-draft-delta` / `report-structure-draft-complete` / `report-section-start` / `report-section-delta` / `report-section-complete`
+3. after confirm, each section is written via recall + generate_report_section
 
-#### `matrix` — マトリクス表の HITL 生成・編集
-**トリガ**: 「比較表」「マトリクス」「表形式で」。
-**モード**: `create` / `edit`（セル選択編集） / `continue`（行追加）
-**フロー**:
-```
-1. matrixTool → first_matrix_structure（カラム定義・初期行 + 質問）
+**SSE events**:
+`first_report_structure` / `regenerated_report_structure` / `report_structure_confirmed` / `report_structure_rejected` / `report-structure-draft-delta` / `report-structure-draft-complete` / `report-section-start` / `report-section-delta` / `report-section-complete`
+
+#### `generate_report_structure` — Generate Report Structure
+
+Produce the initial section outline for a report.
+
+#### `generate_report_section` — Generate Report Section
+
+Write an individual report section after the structure is confirmed.
+
+#### `matrix` — Matrix
+
+Generate or edit a matrix-style comparison table through a draft → confirmation flow.
+
+**Trigger**: 「比較表」「マトリクス」「表形式で」。
+
+**Modes**: `create` / `edit` / `continue`
+
+**Flow**:
+1. matrixTool → first_matrix_structure (columns + initial rows + questions)
 2. regenerate / confirm / abort
-3. confirm 後、各行データを recall + search/browse で抽出
-```
-**関連 SSE**: `first_matrix_structure` / `regenerated_matrix_structure` / `matrix_structure_confirmed` / `matrix_structure_rejected` / `matrix-structure-draft-delta` / `matrix-structure-draft-complete` / `matrix-data-updated` / `matrix-data-preview` / `matrix-data-completed` / `matrix-generation-progress`
+3. after confirm, each row is populated via recall + search/browse
 
-### HITL 操作ツール（6種・LLM が自己呼び出し）
+**SSE events**:
+`first_matrix_structure` / `regenerated_matrix_structure` / `matrix_structure_confirmed` / `matrix_structure_rejected` / `matrix-structure-draft-delta` / `matrix-structure-draft-complete` / `matrix-data-updated` / `matrix-data-preview` / `matrix-data-completed` / `matrix-generation-progress`
 
-| ツール名 | 用途 |
-|----------|------|
-| `confirm_plan` / `regenerate_plan` / `abort_plan` | plan 確認・再生成・キャンセル |
-| `confirm_report_structure` / `regenerate_report_structure` / `abort_report` | report 構造確認・再生成・キャンセル |
+**Notes**: 外部 HITL 操作は `/agent/run/{runId}/matrix/answer` / `/confirm` を直接叩く必要がある（LLM 経由の専用ツールなし）。
 
-※ マトリクスは外部から直接 `/agent/run/{runId}/matrix/answer` / `/confirm` を叩く必要がある（LLM 経由の専用ツールなし）。
+### hitl (9)
 
-### エージェント連携・特殊ツール（4種）
+#### `regenerate_plan` — Regenerate Plan
 
-#### `mention_agent`
-**トリガ**: `[AgentName](agent://agentId)` が `inputText` 内。
-**動作**: 指名 Agent に引き継ぎ。親 run 完了後、子 run が自動起動。
+Regenerate a plan draft with user feedback.
 
-#### `skill`
-**トリガ**: ワークスペースで有効化したカスタムスキルを呼ぶ場合。
-**関連 SSE**: `skill-delta` / `skill-complete` / `skill-error` / `skill-ask-secret` / `skill-session-start` / `skill-source-*`
+#### `confirm_plan` — Confirm Plan
 
-#### `refresh_agent_memory`
-**用途**: エージェントの durable 記憶を明示更新（会話から得た洞察を永続化）。
+Confirm a plan draft and start execution.
 
-#### `extract_graph`
-**トリガ**: ソース要約後に自動発火（明示呼び出しも可）。
-**動作**: エンティティ・関係を抽出して永続化。`GET /graph/*` で取得可能に。
-**関連 SSE**: `graph` / `graph-extraction-entity-delta`
+#### `abort_plan` — Abort Plan
 
-### 内部ツール（3種・外部からは見えない）
+Abort the current plan workflow.
 
-`answer_browser_question` / `send_browser_instruction` / `select_serp` — それぞれ browse・search 内部の下請け。chat-routing からは直接呼ばれない。
+#### `regenerate_report_structure` — Regenerate Report Structure
+
+Regenerate the report outline with user feedback.
+
+#### `confirm_report_structure` — Confirm Report Structure
+
+Confirm the report outline and begin section-by-section writing.
+
+#### `abort_report` — Abort Report
+
+Abort the current report workflow.
+
+#### `regenerate_matrix_structure` — Regenerate Matrix Structure
+
+Regenerate the matrix column/row structure with user feedback.
+
+#### `confirm_matrix_structure` — Confirm Matrix Structure
+
+Confirm the matrix structure and begin populating cells.
+
+#### `abort_matrix` — Abort Matrix
+
+Abort the current matrix workflow.
+
+### agent_integration (3)
+
+#### `refresh_agent_memory` — Refresh Agent Memory
+
+Update the agent's durable memory with insights from the current conversation.
+
+**Notes**: エージェントの durable 記憶を明示更新（会話から得た洞察を永続化）。
+
+#### `mention_agent` — Mention Agent
+
+Hand off work to another agent referenced in the input via agent:// mention.
+
+**Trigger**: `[AgentName](agent://agentId)` が inputText 内に含まれる。
+
+**Notes**: 指名 Agent に引き継ぎ。親 run 完了後、子 run が自動起動。
+
+#### `skill` — Skill
+
+Invoke a workspace-enabled custom skill to extend agent capabilities.
+
+**Trigger**: ワークスペースで有効化したカスタムスキルを呼ぶ場合。
+
+**SSE events**:
+`skill-delta` / `skill-complete` / `skill-error` / `skill-ask-secret` / `skill-session-start` / `skill-source-*`
+
+### internal (5)
+
+#### `answer_browser_question` — Answer Browser Question
+
+Respond to a browse tool question that pauses the browser session.
+
+**Notes**: browse ツール内部の下請け。chat-routing からは直接呼ばれない。
+
+#### `send_browser_instruction` — Send Browser Instruction
+
+Send additional natural-language instructions into an ongoing browse session.
+
+**Notes**: browse ツール内部の下請け。chat-routing からは直接呼ばれない。
+
+#### `extract_graph` — Extract Graph
+
+Extract entities and relationships from sources and persist them to the knowledge graph.
+
+**Trigger**: ソース要約後に自動発火（明示呼び出しも可）。
+
+**SSE events**:
+`graph` / `graph-extraction-entity-delta`
+
+**Notes**: エンティティ・関係を抽出して永続化。`GET /graph/*` で取得可能に。
+
+#### `select_serp` — Select SERP
+
+Internal helper used by search to pick the most relevant SERP entries.
+
+**Notes**: search 内部の下請け（SERP 選別）。chat-routing からは直接呼ばれない。
+
+#### `extract_matrix` — Extract Matrix
+
+Internal helper that extracts cell data from retrieved sources for a matrix row.
+<!-- AUTOGEN:tool-catalog:END -->
 
 ## HITL 生成物の扱い方
 
