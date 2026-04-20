@@ -1,6 +1,6 @@
 # Snorbe Agent Skills
 
-[Snorbe](https://app.snorbe.deskrex.ai/) の自律リサーチエージェントを Claude Code / Cursor / Codex などから呼び出すための Agent Skills。
+[Snorbe](https://lp.snorbe.deskrex.ai/) の自律リサーチエージェントを Claude Code / Cursor / Codex などから呼び出すための Agent Skills。
 
 ## インストール
 
