@@ -188,9 +188,16 @@ SSE 受信中に以下のパターンを見たら HITL 待ち:
 
 ## 使えるモデル
 
-`modelName` は以下から選ぶ。推奨は `snorbe-fast`（速さ重視）/ `snorbe-quality`（品質重視）— これらは内部で最適モデルに自動マッピング。
+`modelName` は **必須**。以下から選ぶ。**API 経由では原則 `snorbe-fast`（速度重視・推奨デフォルト）または `snorbe-quality`（品質重視）を指定する。** これらはプロンプトごとに Snorbe 内部で最適プロバイダモデルへ自動マッピングされる。
 
-個別指定する場合:
+最新の指定可能モデル ID と説明は API から取得できる（認証不要）:
+
+```bash
+curl "https://app.snorbe.deskrex.ai/api/v1/agent/models"
+# => { defaultModel, recommendedModelIds, models: [{ id, displayName, provider, isRecommended, description }] }
+```
+
+個別指定する場合（特定プロバイダに固定する理由がある場合のみ）:
 
 | プロバイダ | モデル名例 |
 |------------|------------|

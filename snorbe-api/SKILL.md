@@ -62,9 +62,47 @@ curl "https://app.snorbe.deskrex.ai/api/v1/agent/list" \
 | ステータス確認（軽量） | `GET /agent/run/{runId}/status` | [reference/agent-execution.md](reference/agent-execution.md) |
 | レジューム | `POST /agent/run/stream/{runId}` | [reference/agent-streaming.md](reference/agent-streaming.md) |
 | HITL 応答（plan/report/matrix） | `POST /agent/run/{runId}/{plan\|report\|matrix}/{answer\|confirm}` | [reference/agent-streaming.md](reference/agent-streaming.md) |
+| 利用可能なモデル一覧 | `GET /agent/models` | [モデル選択](#モデル選択) |
 | ワークスペース | `GET /workspace` | [reference/workspace.md](reference/workspace.md) |
 | エージェント管理 | `GET/POST/PATCH/DELETE /agent[/{id}]` | [reference/workspace.md](reference/workspace.md) |
 | グラフ取得 | `GET /graph/*` | [reference/graph.md](reference/graph.md) |
+
+## モデル選択
+
+`POST /agent/run` / `POST /agent/run/stream` の `modelName` は **必須**。原則 **推奨モデル** を明示指定する。
+
+| 推奨モデル | 用途 |
+|------------|------|
+| `snorbe-fast` | 標準。速度・コスト重視。API クライアントの推奨デフォルト値 |
+| `snorbe-quality` | 難易度が高いリサーチ / 品質重視。内部で強力なプロバイダモデルに自動マッピング |
+
+- 推奨モデルは Snorbe 内部で**プロンプトごとに最適なプロバイダモデル**（Claude / GPT / Gemini 等）へ自動ルーティングされる。個別プロバイダモデル名の指定よりも、こちらを優先する
+- 個別モデル（`claude-opus-4-7`, `gpt-5-mini-2025-08-07` 等）も指定可能だが、特定プロバイダに固定する明確な理由がある場合のみ
+- 指定可能なモデル ID と説明は **`GET /agent/models`** で取得できる（認証不要。`defaultModel` / `recommendedModelIds` / `models[]` を返す）。`defaultModel` は API 側の自動デフォルトではなく、クライアントが選ぶ際の推奨値
+
+```bash
+curl "https://app.snorbe.deskrex.ai/api/v1/agent/models"
+```
+
+レスポンス例:
+
+```json
+{
+  "defaultModel": "snorbe-fast",
+  "recommendedModelIds": ["snorbe-fast", "snorbe-quality"],
+  "models": [
+    {
+      "id": "snorbe-fast",
+      "displayName": "Snorbe-Fast",
+      "provider": "snorbe",
+      "isRecommended": true,
+      "description": "Recommended default for Agent API usage..."
+    }
+  ]
+}
+```
+
+詳細な個別モデル一覧は [capabilities.md#使えるモデル](capabilities.md#使えるモデル) 参照。
 
 ## 共通エラー
 
