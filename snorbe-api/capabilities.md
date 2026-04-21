@@ -19,6 +19,8 @@
 | 複数ステップ・試行錯誤が要る複雑タスク | `plan`（HITL 確認） |
 | `[AgentName](agent://agentId)` 形式の mention | `mention_agent` |
 | `<matrix_selection>` コンテキストあり | `matrix` (mode="edit") 強制 |
+| 特許検索（Google Patents・EPO・JPO等）や論文検索（PubMed・arXiv等）など、オフィシャルスキルが対応するドメイン | `skill`（オフィシャルスキル） |
+| 「〜スキルを使って」「skill で」＋スキル名の明示 | `skill` |
 | 上記いずれにも該当しない一般知識質問 | 直接応答（ツールなし） |
 
 プロンプト設計で挙動を狙う方法は [prompting.md](prompting.md) 参照。
@@ -316,6 +318,31 @@ Internal helper used by search to pick the most relevant SERP entries.
 
 Internal helper that extracts cell data from retrieved sources for a matrix row.
 <!-- AUTOGEN:tool-catalog:END -->
+
+## オフィシャルスキル一覧
+
+ワークスペースで有効化すると、`skill` ツール経由で呼び出せる専門スキル。`GET /skill/list`（API キー必須）で有効化済みの一覧を取得可能。
+
+下記は `src/features/skill/official-skills/` の各 `SKILL.md` フロントマターから自動生成。スキル追加・更新後は `pnpm gen:tool-list` で再生成。
+
+<!-- AUTOGEN:official-skills:START -->
+| スキル | 説明 | 必須シークレット |
+|--------|------|-----------------|
+| **arXiv Search** (`arxiv-search`) | プレプリント論文を最速で検索・取得。CS/AI/ML/物理/数学など幅広い分野に対応。APIキー不要。 | なし |
+| **CB Insights** (`cbinsights`) | 企業シグナル・競合landscape・市場マップ・Mosaic ScoreをCB Insights API v2で取得。client credentials認証（2段階）。 | `CBINSIGHTS_CLIENT_ID`, `CBINSIGHTS_CLIENT_SECRET` |
+| **Data Analysis and Visualization** (`data-analysis-visualization`) | Python/JavaScriptでデータ分析・集計・可視化を行う汎用スキル。CSV/JSON/表データの処理、グラフ画像生成、SVG/HTML/Reactの試作とPNGプレビュー出力に対応。 | なし |
+| **EPO OPS Patent Search** (`epo-ops-search`) | 欧州特許庁のOpen Patent Services (OPS) v3.2で特許検索。CQL構文・書誌情報・ファミリ・リーガルステータス取得。世界40+特許庁をカバー。 | `EPO_OPS_KEY`, `EPO_OPS_SECRET` |
+| **e-Stat Search** (`estat-search`) | 日本政府統計（人口・経済・産業・労働など）をe-Stat APIで構造化取得。統計表検索からデータ取得まで3ステップで対応。 | `ESTAT_APP_ID` |
+| **Google Patents Search** (`google-patents-search`) | Google PatentsをSerpApi経由で検索。キーワード・出願人・CPC分類フィルタ対応。多言語・全文検索で世界特許をカバー。 | `SERPAPI_API_KEY` |
+| **Image Editing** (`image-editing`) | 画像・PDFを入力として編集・分析・比較・合成する汎用スキル。crop、annotate、compose、PDF画像化、テキスト抽出など幅広い画像処理に対応。 | なし |
+| **JPO Patent Search** (`jpo-patent-search`) | 日本の特許情報をJPO特許情報プラットフォーム（J-PlatPat）APIで検索。出願経過・拒絶理由通知・公開公報を取得可能。 | `JPO_API_USERNAME`, `JPO_API_PASSWORD` |
+| **PitchBook** (`pitchbook`) | 企業・投資家・資金調達・M&A・PE/VCデータをPitchBook API v2で取得。private/public market調査に対応。 | `PITCHBOOK_TOKEN` |
+| **PubMed Search** (`pubmed-search`) | 医学・生命科学論文をPubMed (NCBI E-utilities) で検索。MeSH用語・日付・ジャーナルフィルタ対応。要旨全文取得可能。 | `NCBI_API_KEY` |
+| **Semantic Scholar Search** (`semantic-scholar-search`) | 2億件超の学術論文を検索。被引用数ソート、TLDR自動要約、Open Access PDF直リンク、外部ID（arXiv/PMID/DOI）連携対応。 | `SEMANTIC_SCHOLAR_API_KEY` |
+| **Statista** (`statista`) | 市場規模・CAGR・業界統計をStatista Connect APIで検索・取得。TAM/SAM/SOM調査に対応。 | `STATISTA_API_KEY` |
+
+これらのスキルは `skill` ツール経由で呼び出される。呼び出し側の `inputText` に「〜スキルを使って」「skill で」といった指示を含めるか、タスク内容から LLM が自動判定する。各スキルの詳細は `GET /skill/list` で取得可能。
+<!-- AUTOGEN:official-skills:END -->
 
 ## HITL 生成物の扱い方
 
