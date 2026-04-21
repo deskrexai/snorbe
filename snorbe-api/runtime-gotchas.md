@@ -117,6 +117,43 @@ SSE 受信中に以下のイベントを見たら必ず対応:
 
 確認後、`/agent/run/stream/{runId}` でレジュームして本実行を走らせる。
 
+### plan → report の **連鎖 HITL**（要注意）
+
+複雑なマルチステップ要求（「カテゴリ×列×国で網羅的に棚卸し」「指定マーカーで2ファイル分ける」「セクションごとに…」等）を投げると、**plan を確定した直後に今度は report までもう一段 HITL に入る**ことが頻繁にある。以下のパターンで詰まる:
+
+1. 投稿 → `first-plan` 受信 → `/plan/confirm` で確定 → resume
+2. resume 中に `first_report_structure` / `report-structure-draft-complete` が流れる
+3. `/report/confirm` を叩かないと **最終本文が `complete` の `text` に載らない**（代わりに `report_section_*` と `report_complete` で配信される）
+4. さらに resume するまで報告本文生成は始まらない
+
+> 「complete イベントは来たが `text: ""`」という現象は、ほぼ report HITL 待ちで止まっているサイン。`GET /agent/run/{runId}/status` で `pendingReportDraft: true` を確認し、`/report/confirm` → resume をもう1巡する。
+
+**plan / report を一切使わせたくない場合**は、inputText から「レポート」「セクション構成」「棚卸し」のような HITL トリガー語を消し、「以下の形式のマークダウンだけを返してください。他の処理は不要」と直接的に書くと、chat-routing が直接応答ツール（delta のみ）を選びやすい。ただし厳密には防げないので、スクリプト側は plan / report の両方を検出・自動 confirm するロジックを入れておくのが無難。
+
+### report モードの **SSE イベント名はアンダースコア**
+
+ドキュメント上のイベント名は `report-section-complete` のようにハイフンで書かれている箇所があるが、**実配信はアンダースコア**:
+
+| 実際に流れるイベント | payload の主なフィールド |
+|----------------------|--------------------------|
+| `report_section_start` | `reportTitle` / `totalSections` / `sections[{id,title}]` |
+| `report_section_delta` | `sectionId` / `deltaText` |
+| `report_section_complete` | `sectionId` / `sectionTitle` / **`content`**（セクション本文 Markdown） |
+| `report_complete` | `reportTitle` / **`markdown`**（全セクション結合の統合 Markdown）/ `sections[{id,title,content}]` |
+
+パース時は両表記を許容しておく（`report[_-]section[_-]complete` のような正規表現 / `replace("-","_")` でキー正規化）。**本文の取り出しは `report_section_complete.content` か `report_complete.markdown` / `.sections[].content` を見る**。通常の `complete.text` は report モードでは空になる。
+
+### plan draft の構造
+
+`first-plan` / `plan-draft-complete` の `payload.plan` には以下が入る:
+
+- `goal` — 全体ゴール文（複数行 Markdown）
+- `steps[]` — `{id, objective, status}` の配列（step ごとに objective は1文）
+- `questions[]` — ユーザーへの質問（空配列なら無質問で `/plan/confirm` するだけで進む）
+- `currentStepId` / `maxIterations` / `status`
+
+Snorbe 側で `title` / `detail` というキーは無いので、step を表示したいときは `objective` を見る。
+
 ## `maxBrowsingSteps` の実用値
 
 デフォルトは低めに設定されがち。実用的には:

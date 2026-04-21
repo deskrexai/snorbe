@@ -69,6 +69,19 @@ POST /api/v1/agent/run/stream/{runId}
 
 HITL 確認後にレジュームする際に使用。同じ SSE イベントが流れる。
 
+**⚠️ body は必須**: 空 body (`-d ''`) は `{"error":"Invalid JSON body"}`、空オブジェクト (`-d '{}'`) は `{"error":"Invalid option: expected one of snorbe-fast|snorbe-quality|…"}` となり、起動しない。**`modelName` / `promptKey` / `locale` の3点を原 run と同じ値で投げる**のが確実:
+
+```bash
+curl -N -s -X POST "https://app.snorbe.deskrex.ai/api/v1/agent/run/stream/$RUN_ID" \
+  -H "Authorization: Bearer $SNORBE_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
+  --max-time 1800 \
+  -d '{"modelName":"snorbe-quality","promptKey":"chat-routing","locale":"ja"}'
+```
+
+**何度でもレジュームできる**。クライアント側が切断・タイムアウトしても、サーバー側が `status: running` のままなら再接続可能。`GET /agent/run/{runId}/status` で `status: running` / `pending*Draft: false` を確認してから叩く。レジューム後は SSE が `run-start` / `step` / `rag-*` / `delta` / `complete` の順に再び流れる（step index が途中再生されることがある点に注意）。
+
 ### Agent 間メンション連鎖
 
 `mentions` に他 Agent を含めた場合の挙動は `/agent/run`（非ストリーミング）と同じ:
