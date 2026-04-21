@@ -30,7 +30,7 @@ metadata:
 curl "https://app.snorbe.deskrex.ai/api/v1/workspace" \
   -H "Authorization: Bearer $SNORBE_API_KEY"
 
-# 利用可能なエージェント一覧
+# 利用可能なエージェント一覧（名前→ID 解決はここから）
 curl "https://app.snorbe.deskrex.ai/api/v1/agent/list" \
   -H "Authorization: Bearer $SNORBE_API_KEY"
 ```
@@ -39,6 +39,10 @@ curl "https://app.snorbe.deskrex.ai/api/v1/agent/list" \
 - **認証**: `Authorization: Bearer snorbe_xxxxxxxx...`
 - **レート制限**: API キーごとに **100 req/min**
 - **OpenAPI 仕様**: `GET /openapi.json` で機械可読
+
+### どのエージェントで走らせるか（指名の原則）
+
+ユーザーが特定の bot を指名した場合は、**まず `GET /agent/list` で名前→ID を解決してから** `agentId` に直接入れる（`[X](agent://...)` のメンション構文は A→B リレー時以外では使わない）。指名がなければデフォルトエージェントにそのまま投げる。詳細は [prompting.md#エージェント指定の選び方-agentid-vs-mention_agent](prompting.md#エージェント指定の選び方agentid-vs-mention_agent) 参照。
 
 ## ワークフローの基本形（SSE ストリーミング）
 
@@ -60,6 +64,7 @@ curl "https://app.snorbe.deskrex.ai/api/v1/agent/list" \
 | エージェント実行（同期） | `POST /agent/run` | [reference/agent-execution.md](reference/agent-execution.md) |
 | 実行履歴取得（詳細含む） | `GET /chat/list` | [reference/chat.md](reference/chat.md) |
 | ステータス確認（軽量） | `GET /agent/run/{runId}/status` | [reference/agent-execution.md](reference/agent-execution.md) |
+| ラン詳細取得 | `GET /agent/run/{runId}` | [reference/agent-execution.md](reference/agent-execution.md) |
 | レジューム | `POST /agent/run/stream/{runId}` | [reference/agent-streaming.md](reference/agent-streaming.md) |
 | HITL 応答（plan/report/matrix） | `POST /agent/run/{runId}/{plan\|report\|matrix}/{answer\|confirm}` | [reference/agent-streaming.md](reference/agent-streaming.md) |
 | 利用可能なモデル一覧 | `GET /agent/models` | [モデル選択](#モデル選択) |
@@ -68,6 +73,8 @@ curl "https://app.snorbe.deskrex.ai/api/v1/agent/list" \
 | ワークスペース | `GET /workspace` | [reference/workspace.md](reference/workspace.md) |
 | エージェント管理 | `GET/POST/PATCH/DELETE /agent[/{id}]` | [reference/workspace.md](reference/workspace.md) |
 | グラフ取得 | `GET /graph/*` | [reference/graph.md](reference/graph.md) |
+| エンティティ詳細 | `GET /graph/entity/{entityId}` | [reference/graph.md](reference/graph.md) |
+| ソース詳細 | `GET /graph/source/{sourceId}` | [reference/graph.md](reference/graph.md) |
 
 ## モデル選択
 

@@ -153,8 +153,28 @@ curl -X POST "https://app.snorbe.deskrex.ai/api/v1/secret" \
 ## ラン完了後の詳細取得
 
 `/agent/run/{runId}/status` は軽量（`status` + `pending*Draft` フラグのみ）。
-**エージェントの詳細な実行履歴（ブラウズ手順・参照ソース・プラン/レポート/マトリクスの
-ドラフト・グラフ抽出結果など）を取得するには `/chat/list` を使う。**
+**特定の `runId` で詳細を取得するには `GET /agent/run/{runId}` を使う。**
+
+### GET /agent/run/{runId}
+
+```bash
+curl "https://app.snorbe.deskrex.ai/api/v1/agent/run/clxxx001" \
+  -H "Authorization: Bearer snorbe_YOUR_KEY"
+```
+
+レスポンスに以下が含まれる:
+
+| フィールド | 内容 |
+|---|---|
+| `status` | 実行ステータス |
+| `process` | **全イベントのタイムライン**（`config`・`delta`・`step`・`browse-*`・`plan`・`source-summary-*`・`graph-*` 等すべて） |
+| `linkedSources` | エージェントが参照したソース（bodyLinks 含む） |
+| `linkedEntities` | エージェントが抽出・参照したエンティティ |
+| `agent` | エージェント情報 |
+
+### GET /chat/list（一覧からの取得）
+
+`/chat/list` でも同じ情報を取得できる。複数の run をまとめて確認する場合に使う。
 
 ```bash
 curl "https://app.snorbe.deskrex.ai/api/v1/chat/list?limit=10" \
@@ -169,9 +189,6 @@ curl "https://app.snorbe.deskrex.ai/api/v1/chat/list?limit=10" \
 | `process` | **全イベントのタイムライン**（`config`・`delta`・`step`・`browse-*`・`plan`・`source-summary-*`・`graph-*` 等すべて） |
 | `publicSourceAgentRuns` / `privateSourceAgentRuns` | エージェントが参照した URL ソース（bodyLinks 含む） |
 | `agent` | エージェント情報 |
-
-特定 runId を取りたい場合は `/chat/list` を降順でページングし、
-`chats[].agentRun.id === 対象 runId` で探す（直接 runId 指定の取得エンドポイントは未提供）。
 
 ---
 

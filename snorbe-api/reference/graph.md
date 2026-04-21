@@ -177,3 +177,129 @@ curl "https://app.snorbe.deskrex.ai/api/v1/graph/edges?entityIds=claaa001,clbbb0
 - **エンティティ詳細表示**: `/graph/entities` で取得したIDを指定して関連エッジを取得
 - **関係性分析**: 複数エンティティのIDを指定して、それらの繋がりを可視化
 - **タイプ絞り込み**: `type=RELATED_TO` で特定のリレーションタイプのみ取得
+
+---
+
+## GET /graph/entity/{entityId}
+
+エンティティ詳細を取得。リンク先エンティティ、紐づくAgentRun（process全文含む）を返す。
+
+### リクエスト
+
+```bash
+curl "https://app.snorbe.deskrex.ai/api/v1/graph/entity/clxxx001" \
+  -H "Authorization: Bearer snorbe_YOUR_KEY"
+```
+
+### パラメータ
+
+| パラメータ | 型 | 必須 | 説明 |
+|-----------|------|------|------|
+| `entityId` | `string`（path） | はい | エンティティID |
+
+### レスポンス
+
+```json
+{
+  "id": "clxxx001",
+  "label": "リチウムイオン電池",
+  "category": "Technology",
+  "kind": "battery",
+  "description": "充電可能な二次電池",
+  "metadata": { "url": { "value": "https://...", "type": "text" } },
+  "pagerank": 0.045,
+  "communityId": 3,
+  "createdAt": "2026-01-15T10:30:00.000Z",
+  "updatedAt": "2026-03-20T14:22:00.000Z",
+  "linkedEntities": [
+    {
+      "id": "clxxx002",
+      "label": "ソリッドステート電池",
+      "category": "Technology",
+      "kind": "battery",
+      "description": "固体電解質を使用する電池",
+      "edgeType": "RELATED_TO"
+    }
+  ],
+  "agentRuns": [
+    {
+      "id": "clrun001",
+      "status": "completed",
+      "process": [
+        { "type": "config", "modelName": "gpt-4o", ... },
+        { "type": "delta", "text": "..." },
+        { "type": "step", "tool": "search", ... }
+      ],
+      "createdAt": "2026-04-01T09:00:00.000Z"
+    }
+  ]
+}
+```
+
+### ユースケース
+
+- **エンティティの深掘り**: 特定エンティティの詳細情報と、どのAgentRunで抽出・参照されたかを確認
+- **知識の出所追跡**: `agentRuns[].process` からエンティティ抽出時の検索・要約の経緯を追う
+- **関連エンティティの探索**: `linkedEntities` でリンク先のエンティティとリレーションタイプを確認
+
+---
+
+## GET /graph/source/{sourceId}
+
+ソース（Public/Private）の詳細を取得。本文（body）、抽出リンク、紐づくAgentRun・エンティティを返す。
+
+### リクエスト
+
+```bash
+curl "https://app.snorbe.deskrex.ai/api/v1/graph/source/clsrc001?sourceType=public" \
+  -H "Authorization: Bearer snorbe_YOUR_KEY"
+```
+
+### パラメータ
+
+| パラメータ | 型 | 必須 | 説明 |
+|-----------|------|------|------|
+| `sourceId` | `string`（path） | はい | ソースID |
+| `sourceType` | `string`（query） | はい | `"public"` または `"private"` |
+
+### レスポンス
+
+```json
+{
+  "id": "clsrc001",
+  "title": "2026年 バッテリ技術トレンド",
+  "url": "https://example.com/battery-trends-2026",
+  "body": "本文テキスト全文...",
+  "bodyLinks": [
+    { "url": "https://example.com/lithium-ion", "title": "リチウムイオン電池の最新動向" },
+    { "url": "https://example.com/solid-state", "title": "ソリッドステート電池の展望" }
+  ],
+  "sourceType": "public",
+  "agentRuns": [
+    {
+      "id": "clrun002",
+      "status": "completed",
+      "process": [
+        { "type": "source-summary-start", ... },
+        { "type": "source-summary-complete", ... }
+      ],
+      "createdAt": "2026-04-10T11:00:00.000Z"
+    }
+  ],
+  "linkedEntities": [
+    {
+      "id": "clxxx001",
+      "label": "リチウムイオン電池",
+      "category": "Technology",
+      "kind": "battery"
+    }
+  ],
+  "createdAt": "2026-04-10T11:00:00.000Z"
+}
+```
+
+### ユースケース
+
+- **ソース内容の確認**: AgentRunで参照されたURLの本文全文を取得
+- **リンク先の調査**: `bodyLinks` から抽出されたリンク先を確認
+- **エンティティ紐付けの確認**: そのソースからどのエンティティが抽出されたかを確認

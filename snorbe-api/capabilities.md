@@ -395,7 +395,7 @@ curl "https://app.snorbe.deskrex.ai/api/v1/agent/models"
 - `publicSourceAgentRuns` / `privateSourceAgentRuns` — 参照した URL ソース（`bodyLinks` メタ付き）
 - `status` / `agent`
 
-> `runId` を直接指定して取得するエンドポイントは未提供。特定の `runId` を探すには `/chat/list` を降順でページング。
+> `runId` を直接指定して取得するには `GET /agent/run/{runId}` を使う。`process`・`linkedSources`・`linkedEntities` を返す。一覧から探す場合は `/chat/list` を降順でページング。
 
 軽量ステータスのみ欲しい場合は `GET /agent/run/{runId}/status`（`pending*Draft` フラグ + `status` のみ、`process` 含まず）。
 
@@ -406,3 +406,5 @@ curl "https://app.snorbe.deskrex.ai/api/v1/agent/models"
 - `GET /graph/workspace` — ワークスペース全体
 - `GET /graph/entities` — エンティティ一覧（検索・フィルタ）
 - `GET /graph/edges` — エッジ（リレーション）一覧
+- `GET /graph/entity/{entityId}` — エンティティ詳細（AgentRun・リンク先含む）
+- `GET /graph/source/{sourceId}` — ソース詳細（本文・リンク・AgentRun・エンティティ含む）

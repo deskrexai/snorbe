@@ -103,7 +103,46 @@ InSphero 社の特許（WO2012014047A1, WO2016166315A1, WO2019008189A1）を
 - 「ワークスペースに既に」「登録されている」→ `recall` 発火
 - `targetEntities[]` や `mentions[]` で明示指定も可
 
+### エージェント指定の選び方（`agentId` vs `mention_agent`）
+
+ユーザーが「〇〇ボットに依頼して」「〇〇さん bot に聞いて」と言ったとき、**どの経路で呼ぶか**を取り違えない。原則は下表:
+
+| ユーザーの指示パターン | 正しい呼び方 | 理由 |
+|------------------------|--------------|------|
+| 「bot 名を何も指定していない」 | `agentId` 省略（= デフォルトエージェント）、`mentions` なし | ワンホップで最短。mention_agent を誤発火させない |
+| 「X bot に◯◯を依頼」「X bot で調査」（単一指名） | `agentId: "<X の id>"` を直接指定、`inputText` に `[X](agent://...)` を**書かない** | デフォルト入口→X への無駄なホップを省ける。self-loop 判定に当たらず確実 |
+| 「A bot から B bot にメンションして」「A で先に◯◯、その結果を B に」（チェーン／リレー） | 入口は A（`agentId=A`）。`inputText` に `[B](agent://Bid)` を書く＋ `mentions` に B を配列で渡す | `mention_agent` が意図通り発火し、A→B の依存関係が保たれる |
+| 「A と B の 2 体に並行で意見を」 | 入口はデフォルト（または指示された primary）。`inputText` に `[A](agent://...)` `[B](agent://...)` 両方記載＋ `mentions` に両方 | サーバ側分類器が `parallel` 判定する |
+
+### ID が分からない場合の定石
+
+ユーザーがエージェント名しか知らない／API クライアント側が ID を持っていない場合、**投稿前に必ず `GET /agent/list` を 1 回叩いて名前→ID 変換する**。毎リクエストではなく、必要時にだけ。
+
+```bash
+# 1. 一覧取得（認証必須）
+curl -s "https://app.snorbe.deskrex.ai/api/v1/agent/list" \
+  -H "Authorization: Bearer $SNORBE_API_KEY"
+# => [{"id":"cmo...","name":"funaki_san_bot","isDefault":true}, {"id":"cmnu...","name":"itani_san_bot",...}, ...]
+
+# 2. name が一致するエントリの id を取得
+#   jq 例: jq -r '.[] | select(.name=="tanaka_san_bot") | .id'
+
+# 3. 単一指名なら agentId に直接セット
+curl -X POST "https://app.snorbe.deskrex.ai/api/v1/agent/run/stream" \
+  -H "Authorization: Bearer $SNORBE_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
+  -d '{"agentId":"<解決したid>","modelName":"snorbe-fast","promptKey":"chat-routing","locale":"ja","inputText":"…"}'
+```
+
+**名前→ID 解決時の注意:**
+- `name` は workspace 内で一意だが、表記ゆれ（大小文字、アンダースコア有無）に備えて完全一致→部分一致の順でマッチする
+- 一意に解決できない場合は **ユーザーに確認** してから投げる（当て推量で投げない）
+- `isDefault: true` のエージェントが「無指定時のデフォルト」。単に「bot で調査して」としか言われていなければ、これを使う（`agentId` 省略でも同じ挙動）
+
 ### マルチエージェント委譲（`mention_agent`）
+
+**リレーが必要なときだけ**使う。単一 bot 指名では使わない。
 
 ```
 [agent-legal](agent://ag_xxx) に契約条項のレビューを依頼し、
@@ -113,6 +152,10 @@ InSphero 社の特許（WO2012014047A1, WO2016166315A1, WO2019008189A1）を
 誘導要素:
 - `[name](agent://id)` 形式 → `mention_agent` 発火
 - 2 体以上なら `parallel` / `chain` を LLM 分類器が判定
+- `mentions: [{id, type:"agent", label}]` 配列も併記すると解釈が安定
+
+**アンチパターン:**
+- 単一 bot を指名したいだけなのに `[X](agent://...)` を書いてしまう → デフォルト入口が先に走って X に連鎖する二重実行になる。`agentId` 直指定に切り替える
 
 ## 避けるべき inputText パターン
 
