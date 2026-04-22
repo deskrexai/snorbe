@@ -204,7 +204,7 @@ Write an individual report section after the structure is confirmed.
 
 Generate or edit a matrix-style comparison table through a draft → confirmation flow.
 
-**Trigger**: 「比較表」「マトリクス」「表形式で」。
+**Trigger**: 「比較表」「マトリクス」「表形式で」「CSVに追記」「表を埋める」「列を足す」。
 
 **Modes**: `create` / `edit` / `continue`
 
