@@ -218,7 +218,7 @@ Generate or edit a matrix-style comparison table through a draft → confirmatio
 
 **Notes**: 外部 HITL 操作は `/agent/run/{runId}/matrix/answer` / `/confirm` を直接叩く必要がある（LLM 経由の専用ツールなし）。
 
-### hitl (9)
+### hitl (12)
 
 #### `regenerate_plan` — Regenerate Plan
 
@@ -227,6 +227,10 @@ Regenerate a plan draft with user feedback.
 #### `confirm_plan` — Confirm Plan
 
 Confirm a plan draft and start execution.
+
+#### `confirm_plan_with_changes` — Confirm Plan with Changes
+
+Apply minor changes and immediately start execution.
 
 #### `abort_plan` — Abort Plan
 
@@ -240,6 +244,10 @@ Regenerate the report outline with user feedback.
 
 Confirm the report outline and begin section-by-section writing.
 
+#### `confirm_report_structure_with_changes` — Confirm Report Structure with Changes
+
+Apply minor structural edits and immediately begin section writing.
+
 #### `abort_report` — Abort Report
 
 Abort the current report workflow.
@@ -251,6 +259,10 @@ Regenerate the matrix column/row structure with user feedback.
 #### `confirm_matrix_structure` — Confirm Matrix Structure
 
 Confirm the matrix structure and begin populating cells.
+
+#### `confirm_matrix_structure_with_changes` — Confirm Matrix Structure with Changes
+
+Apply minor structural edits and immediately begin data extraction.
 
 #### `abort_matrix` — Abort Matrix
 
