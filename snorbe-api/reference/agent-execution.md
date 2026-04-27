@@ -78,7 +78,7 @@ resp = requests.post(
   "model": { "name": "gpt-4o" },
   "runId": "clxxx001",
   "status": "completed",
-  "assistantChatId": "clyyy001",
+  "assistantTurnId": "clyyy001",
   "agentId": "clzzz001",
   "agentName": "agent"
 }
