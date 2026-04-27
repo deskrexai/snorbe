@@ -78,7 +78,7 @@ requests.post(url, json=body, timeout=600)  # 10分以上
 
 **短くすると起こること:**
 - クライアントが切断しても**サーバーは最後まで走る**
-- 結果はチャット履歴に積まれる → `/chat/list` で回収可能
+- 結果は Turn 履歴に積まれる → `/turn/list` で回収可能
 - 呼び出し元は切断された側として何も受け取れない
 
 ### `/agent/run/stream`（SSE）
@@ -179,19 +179,19 @@ Claude Code の `Bash` ツールで `run_in_background: true` を使う場合:
   - ログをファイルに直書き（`/tmp/progress.log`）
   - `Monitor` ツールで `tail -f <logfile>` して進捗ウォッチ
 
-## `/chat/list` 経由の詳細取得
+## `/turn/list` 経由の詳細取得
 
-SSE が切れても、`chats[].agentRun.process` に**全イベントが永続化**される。
+SSE が切れても、`turns[].agentRun.process` に**全イベントが永続化**される。
 
 ```python
 import requests
 
 resp = requests.get(
-    f"{BASE}/chat/list?limit=20",
+    f"{BASE}/turn/list?limit=20",
     headers={"Authorization": f"Bearer {API_KEY}"}
 )
-for chat in resp.json()["chats"]:
-    run = chat.get("agentRun")
+for turn in resp.json()["turns"]:
+    run = turn.get("agentRun")
     if run and run["id"] == target_run_id:
         print(run["process"])           # 全SSEイベント
         print(run["publicSourceAgentRuns"])  # 参照ソース
@@ -238,4 +238,4 @@ def extract_json(text: str):
 2. HTTP 200 が返るのに SSE が流れない → Python requests 疑い
 3. `first-plan` 等の HITL イベントで停止 → confirm/answer 忘れ
 4. 結果が JSON パースできない → プロンプトで「他テキスト不要」を強く明示
-5. 途中で切断 → `runId` を保存、`/chat/list` で後日回収、または `/agent/run/stream/{runId}` でレジューム
+5. 途中で切断 → `runId` を保存、`/turn/list` で後日回収、または `/agent/run/stream/{runId}` でレジューム
