@@ -217,7 +217,7 @@ curl "https://app.snorbe.deskrex.ai/api/v1/turn/list?limit=10" \
 1. デフォルト（または `agentId` で指定した）エージェントが run を開始
 2. run 中に LLM が `mentionAgent` tool を選択 → 指名対象をメモ
 3. run 完了後、サーバが **最終アシスタントメッセージ本文をそのまま入力** として agent-beta の新しい AgentRun を起動
-4. 起動された child run は独立した run として完了し、chat 履歴に積まれる
+4. 起動された child run は独立した run として完了し、turn 履歴に積まれる
 
 ### 2 体以上指名（並列 vs 連鎖）
 
@@ -249,5 +249,5 @@ Plan/Report/Matrix 確定で resume された run が最終メッセージで `m
 
 `/agent/run` のレスポンスは **親 run の** `runId` / `text` のみを返す。child run は非同期に DB に積まれるので、child 側の結果を追いたい場合は:
 
-- `/turn/list?limit=N` で最新 chat を取得（各 chat は `agentRunId` を持つ）
+- `/turn/list?limit=N` で最新 turn を取得（各 turn は `agentRunId` を持つ）
 - `/agent/run/{childRunId}/status` で個別ステータス確認

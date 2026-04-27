@@ -44,7 +44,7 @@ curl -X POST "https://app.snorbe.deskrex.ai/api/v1/agent/run" \
 1. alpha の run が開始
 2. alpha の LLM が `mentionAgent` tool を選択し、最終メッセージに `[@agent-beta](agent://b-id) 好きな色を一言で` を書く
 3. alpha 完了後、サーバが自動で beta の新規 AgentRun を起動（入力 = alpha の最終メッセージ）
-4. beta が独立 run として応答を生成、chat 履歴に積まれる
+4. beta が独立 run として応答を生成、turn 履歴に積まれる
 
 `/agent/run` のレスポンスは**親 run の runId のみ**を返す。child run の結果を取るには次項を参照。
 
