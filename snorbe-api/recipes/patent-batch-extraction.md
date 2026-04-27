@@ -250,7 +250,7 @@ google-patents-search スキルを使って、patent_id={公開番号} の figur
 - **「他テキスト不要」を強く書く**（前置きが入ると JSON パース失敗）
 - **レート制限**: SerpApi 無料枠は月100回。`detail_count` に注意
 - **再実行性**: 成功したファイルは `if out_file.exists()` でスキップ
-- **失敗時の回収**: `runId` をログに残しておけば `GET /turn/list` で事後回収可能
+- **失敗時の回収**: `runId` をログに残しておけば `GET /chat/list` で事後回収可能
 
 ## トラブルシューティング
 
@@ -260,5 +260,5 @@ google-patents-search スキルを使って、patent_id={公開番号} の figur
 | `[WARN] parse error` | プロンプトを強化（「他テキスト不要」明示） |
 | 請求項が空（`claims: []`） | SerpApi 側にデータがない可能性。`browse` で再試行 |
 | 翻訳品質が低い | `modelName` を `snorbe-quality` または `claude-sonnet-4-6` に |
-| 途中で切断 | `runId` を使って `/agent/run/stream/{runId}` でレジューム、または `/turn/list` で回収 |
+| 途中で切断 | `runId` を使って `/agent/run/stream/{runId}` でレジューム、または `/chat/list` で回収 |
 | `skill` が発火せず `browse` になる | プロンプトの先頭に「google-patents-search スキルを使って」を追加 |

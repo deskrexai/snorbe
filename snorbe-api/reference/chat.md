@@ -1,22 +1,22 @@
-# 会話ターン履歴の一覧取得
+# チャット履歴の一覧取得
 
-## GET /turn/list
+## GET /chat/list
 
-Turn 履歴をカーソルベースのページネーションで取得。新しい順。
+チャット履歴をカーソルベースのページネーションで取得。新しい順。
 
-> **用途**: このエンドポイントは単なる会話ターン取得ではなく、
+> **用途**: このエンドポイントは単なるチャット履歴取得ではなく、
 > **エージェントランの詳細結果を後から取得する主要な手段** でもある。
-> `turns[].agentRun.process` に SSE イベントの永続化タイムラインが入っているため、
+> `chats[].agentRun.process` に SSE イベントの永続化タイムラインが入っているため、
 > ブラウズ手順・ツール呼び出し・プラン/レポート/マトリクスドラフト・グラフ抽出・
 > ソース要約などの詳細を全部取得可能。`publicSourceAgentRuns` /
 > `privateSourceAgentRuns` には参照した URL ソースが含まれる。
 > （直接 runId を指定して取得するエンドポイントは提供されていないので、
-> 目的の runId を探すには `/turn/list` をページングする必要がある）
+> 目的の runId を探すには `/chat/list` をページングする必要がある）
 
 ### リクエスト
 
 ```bash
-curl "https://app.snorbe.deskrex.ai/api/v1/turn/list?limit=10" \
+curl "https://app.snorbe.deskrex.ai/api/v1/chat/list?limit=10" \
   -H "Authorization: Bearer snorbe_YOUR_KEY"
 ```
 
@@ -31,10 +31,10 @@ curl "https://app.snorbe.deskrex.ai/api/v1/turn/list?limit=10" \
 
 ```json
 {
-  "turns": [
+  "chats": [
     {
       "id": "clxxx001",
-      "kind": "user",
+      "role": "user",
       "content": "最新のAI動向を調査して",
       "agentRunId": null,
       "createdAt": "2026-04-16T10:30:00.000Z",
@@ -42,7 +42,7 @@ curl "https://app.snorbe.deskrex.ai/api/v1/turn/list?limit=10" \
     },
     {
       "id": "clxxx002",
-      "kind": "assistant",
+      "role": "assistant",
       "content": "調査結果をお伝えします...",
       "agentRunId": "clyyy001",
       "createdAt": "2026-04-16T10:30:05.000Z",
@@ -77,8 +77,6 @@ curl "https://app.snorbe.deskrex.ai/api/v1/turn/list?limit=10" \
 }
 ```
 
-`kind` の取りうる値: `"user"` / `"assistant"` / `"error"`
-
 ### agentRun.process に含まれるイベント
 
 SSE で流れるイベント（`config`・`delta`・`step`・`browse-*`・`plan*`・
@@ -94,7 +92,7 @@ SSE で流れるイベント（`config`・`delta`・`step`・`browse-*`・`plan*
 ```python
 import requests
 
-BASE = "https://app.snorbe.deskrex.ai/api/v1/turn/list"
+BASE = "https://app.snorbe.deskrex.ai/api/v1/chat/list"
 HEADERS = {"Authorization": "Bearer snorbe_YOUR_KEY"}
 TARGET_RUN_ID = "cmo6zqh5g000os601l438gqh3"
 
@@ -104,8 +102,8 @@ while True:
     if cursor:
         params["cursor"] = cursor
     data = requests.get(BASE, params=params, headers=HEADERS).json()
-    for turn in data["turns"]:
-        run = turn.get("agentRun")
+    for chat in data["chats"]:
+        run = chat.get("agentRun")
         if run and run["id"] == TARGET_RUN_ID:
             print(run["process"])  # 全イベント
             break
@@ -117,7 +115,7 @@ while True:
 ### 全件取得パターン
 
 ```typescript
-const baseUrl = "https://app.snorbe.deskrex.ai/api/v1/turn/list";
+const baseUrl = "https://app.snorbe.deskrex.ai/api/v1/chat/list";
 const headers = { Authorization: "Bearer snorbe_YOUR_KEY" };
 let cursor: string | undefined;
 
@@ -127,8 +125,8 @@ do {
     : `${baseUrl}?limit=50`;
   const resp = await fetch(url, { headers });
   const data = await resp.json();
-  for (const turn of data.turns) {
-    console.log(`[${turn.kind}] ${turn.content.slice(0, 80)}`);
+  for (const chat of data.chats) {
+    console.log(`[${chat.role}] ${chat.content.slice(0, 80)}`);
   }
   cursor = data.nextCursor ?? undefined;
 } while (cursor);
@@ -137,7 +135,7 @@ do {
 ```python
 import requests
 
-base_url = "https://app.snorbe.deskrex.ai/api/v1/turn/list"
+base_url = "https://app.snorbe.deskrex.ai/api/v1/chat/list"
 headers = {"Authorization": "Bearer snorbe_YOUR_KEY"}
 cursor = None
 
@@ -147,8 +145,8 @@ while True:
         params["cursor"] = cursor
     resp = requests.get(base_url, params=params, headers=headers)
     data = resp.json()
-    for turn in data["turns"]:
-        print(f"[{turn['kind']}] {turn['content'][:80]}")
+    for chat in data["chats"]:
+        print(f"[{chat['role']}] {chat['content'][:80]}")
     cursor = data.get("nextCursor")
     if not cursor:
         break

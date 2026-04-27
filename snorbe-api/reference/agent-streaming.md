@@ -56,10 +56,10 @@ data: {"type":"complete","payload":{"runId":"clxxx001","text":"最終応答","fi
 | グラフ抽出 | `graph-start`・`graph`・`graph-extraction-entity-delta` |
 
 > **完了後の取得**: SSE が途中で切れた場合や後追いで詳細を取得したい場合は、
-> [`/turn/list`](turn.md) を使う。`turns[].agentRun.process` に上記イベントの
+> [`/chat/list`](chat.md) を使う。`chats[].agentRun.process` に上記イベントの
 > 永続化タイムラインが、`publicSourceAgentRuns` / `privateSourceAgentRuns` に
 > 参照ソースが入っている（直接 runId 指定の取得エンドポイントは未提供なので、
-> `/turn/list` をページングして該当 runId を探す）。
+> `/chat/list` をページングして該当 runId を探す）。
 
 ### レジューム
 
@@ -90,7 +90,7 @@ curl -N -s -X POST "https://app.snorbe.deskrex.ai/api/v1/agent/run/stream/$RUN_I
 - 2 体以上: サーバ側 classifier が parallel / chain を判定
 - `maxChainSteps`（1-50、default 10）で再帰深さを制限
 
-ストリーミング特有の注意: **親 run の SSE `complete` イベントが流れた後に child run が起動する**。child 側のイベントは別の SSE ストリームで流れるわけではない。child の出力を追いたい場合は、`complete` 後に `/turn/list` または child の `runId` を使って個別に状態取得する。
+ストリーミング特有の注意: **親 run の SSE `complete` イベントが流れた後に child run が起動する**。child 側のイベントは別の SSE ストリームで流れるわけではない。child の出力を追いたい場合は、`complete` 後に `/chat/list` または child の `runId` を使って個別に状態取得する。
 
 詳細は [rules/agent-execution.md](agent-execution.md#エージェント委譲メンション) を参照。
 

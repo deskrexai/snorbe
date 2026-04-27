@@ -50,7 +50,7 @@ curl "https://app.snorbe.deskrex.ai/api/v1/agent/list" \
 1. POST /agent/run/stream に inputText を投げる
 2. SSE で config / step / delta / browse-* / plan-* / complete イベントを受信
 3. complete イベントで最終テキストと runId を取得
-4. 詳細が必要なら GET /turn/list で agentRun.process と sources を回収
+4. 詳細が必要なら GET /chat/list で agentRun.process と sources を回収
 ```
 
 **重要**: SSE は `curl` で安定受信できるが、Python `requests.iter_lines` は
@@ -62,7 +62,7 @@ curl "https://app.snorbe.deskrex.ai/api/v1/agent/list" \
 |------|----------------|------|
 | エージェント実行（推奨） | `POST /agent/run/stream` | [reference/agent-streaming.md](reference/agent-streaming.md) |
 | エージェント実行（同期） | `POST /agent/run` | [reference/agent-execution.md](reference/agent-execution.md) |
-| 実行履歴取得（詳細含む） | `GET /turn/list` | [reference/turn.md](reference/turn.md) |
+| 実行履歴取得（詳細含む） | `GET /chat/list` | [reference/chat.md](reference/chat.md) |
 | ステータス確認（軽量） | `GET /agent/run/{runId}/status` | [reference/agent-execution.md](reference/agent-execution.md) |
 | ラン詳細取得 | `GET /agent/run/{runId}` | [reference/agent-execution.md](reference/agent-execution.md) |
 | レジューム | `POST /agent/run/stream/{runId}` | [reference/agent-streaming.md](reference/agent-streaming.md) |
@@ -125,7 +125,7 @@ curl "https://app.snorbe.deskrex.ai/api/v1/agent/models"
 
 - ❌ `inputText: "調べて"` のような曖昧な入力 → ツール選択がブレる
 - ❌ Python `requests` で SSE 受信（background 実行で詰まる）
-- ❌ client timeout 短い設定での `/agent/run` 呼び出し → client 切断、結果は `/turn/list` 回収
+- ❌ client timeout 短い設定での `/agent/run` 呼び出し → client 切断、結果は `/chat/list` 回収
 - ❌ HITL（plan/report/matrix）を無視 → draft のまま stuck
 
 各対処は [prompting.md](prompting.md) / [runtime-gotchas.md](runtime-gotchas.md) 参照。

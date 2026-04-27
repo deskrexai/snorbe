@@ -12,7 +12,7 @@
 >
 > クライアントのデフォルトタイムアウト（curl 0秒=無制限だが、多くの HTTP ライブラリは
 > 30〜120秒）で切断された場合、**サーバー側は最後まで走り切るが、レスポンスは呼び出し元に
-> 届かない**。結果は `/turn/list` に積まれるので後追いで取得できる。
+> 届かない**。結果は `/chat/list` に積まれるので後追いで取得できる。
 >
 > **推奨**:
 > - 単純な Q&A 以外は **`/agent/run/stream`（SSEストリーミング）** を使う（最初のイベントで
@@ -172,16 +172,16 @@ curl "https://app.snorbe.deskrex.ai/api/v1/agent/run/clxxx001" \
 | `linkedEntities` | エージェントが抽出・参照したエンティティ |
 | `agent` | エージェント情報 |
 
-### GET /turn/list（一覧からの取得）
+### GET /chat/list（一覧からの取得）
 
-`/turn/list` でも同じ情報を取得できる。複数の run をまとめて確認する場合に使う。
+`/chat/list` でも同じ情報を取得できる。複数の run をまとめて確認する場合に使う。
 
 ```bash
-curl "https://app.snorbe.deskrex.ai/api/v1/turn/list?limit=10" \
+curl "https://app.snorbe.deskrex.ai/api/v1/chat/list?limit=10" \
   -H "Authorization: Bearer snorbe_YOUR_KEY"
 ```
 
-`turns[].agentRun` に以下が含まれる:
+`chats[].agentRun` に以下が含まれる:
 
 | フィールド | 内容 |
 |---|---|
@@ -249,5 +249,5 @@ Plan/Report/Matrix 確定で resume された run が最終メッセージで `m
 
 `/agent/run` のレスポンスは **親 run の** `runId` / `text` のみを返す。child run は非同期に DB に積まれるので、child 側の結果を追いたい場合は:
 
-- `/turn/list?limit=N` で最新 chat を取得（各 chat は `agentRunId` を持つ）
+- `/chat/list?limit=N` で最新 chat を取得（各 chat は `agentRunId` を持つ）
 - `/agent/run/{childRunId}/status` で個別ステータス確認
