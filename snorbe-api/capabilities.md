@@ -400,14 +400,14 @@ curl "https://app.snorbe.deskrex.ai/api/v1/agent/models"
 
 ## 事後取得（ラン完了後の詳細データ）
 
-エージェント実行後に詳細を回収する主要エンドポイントは `GET /chat/list`。
+エージェント実行後に詳細を回収する主要エンドポイントは `GET /turn/list`。
 
-`chats[].agentRun` に以下が丸ごと入る:
+`turns[].agentRun` に以下が丸ごと入る:
 - `process` — SSE イベントの永続化タイムライン全て
 - `publicSourceAgentRuns` / `privateSourceAgentRuns` — 参照した URL ソース（`bodyLinks` メタ付き）
 - `status` / `agent`
 
-> `runId` を直接指定して取得するには `GET /agent/run/{runId}` を使う。`process`・`linkedSources`・`linkedEntities` を返す。一覧から探す場合は `/chat/list` を降順でページング。
+> `runId` を直接指定して取得するには `GET /agent/run/{runId}` を使う。`process`・`linkedSources`・`linkedEntities` を返す。一覧から探す場合は `/turn/list` を降順でページング。
 
 軽量ステータスのみ欲しい場合は `GET /agent/run/{runId}/status`（`pending*Draft` フラグ + `status` のみ、`process` 含まず）。
 

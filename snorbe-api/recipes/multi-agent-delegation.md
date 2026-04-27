@@ -84,14 +84,14 @@ curl -X POST "https://app.snorbe.deskrex.ai/api/v1/agent/run" \
 
 `/agent/run` は親の runId しか返さないので、child は別途取得:
 
-### 方法 A: `/chat/list` で最新 chat を走査
+### 方法 A: `/turn/list` で最新 Turn を走査
 
 ```bash
-curl "https://app.snorbe.deskrex.ai/api/v1/chat/list?limit=10" \
+curl "https://app.snorbe.deskrex.ai/api/v1/turn/list?limit=10" \
   -H "Authorization: Bearer snorbe_YOUR_KEY"
 ```
 
-各 chat の `agentRunId` と `role` / `content` から child の応答を特定可能。
+各 Turn の `agentRunId` と `kind` / `content` から child の応答を特定可能。
 
 ### 方法 B: 個別ステータス確認
 
@@ -118,7 +118,7 @@ curl "https://app.snorbe.deskrex.ai/api/v1/agent/run/{childRunId}/status" \
 
 ## 6. ストリーミング版
 
-`/agent/run/stream` でも `mentions` の挙動は同じ。親の `complete` イベント後に child が非同期起動する。child の SSE は別途張り直す必要はなく、`/chat/list` または `/status` で結果を取得する。
+`/agent/run/stream` でも `mentions` の挙動は同じ。親の `complete` イベント後に child が非同期起動する。child の SSE は別途張り直す必要はなく、`/turn/list` または `/status` で結果を取得する。
 
 ## ガード動作
 
