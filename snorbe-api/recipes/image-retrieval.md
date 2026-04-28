@@ -87,7 +87,7 @@ curl "https://app.snorbe.deskrex.ai/api/v1/agent/run/{runId}" \
 | `title` | string \| undefined | 画像のタイトルやキャプション（オプション） |
 | `link` | string \| undefined | 画像が掲載されていたページの URL（オプション） |
 
-## 画像の出所（4経路）
+## 画像の出所（5経路）
 
 返された flat 配列内の画像は、以下のいずれかの経路から抽出されている。**レスポンスには出所情報は含まれない** ため、必要に応じて `process` イベントを手動で辿る:
 
@@ -95,6 +95,7 @@ curl "https://app.snorbe.deskrex.ai/api/v1/agent/run/{runId}" \
 2. **`skill-complete.outputFiles`** — スキル実行の成果物ファイル（`mimeType: image/*`）
 3. **`search-summary-complete.bodyLinks`** — Web 検索後の サマリーに含まれるリンク（`type: "image"`）
 4. **`source-summary-complete.results[].bodyLinks`** — ソース要約結果に含まれるリンク（`type: "image"`）
+5. **`rag-context-complete.sources[].bodyLinks`** — recall（RAG）でヒットしたソースの bodyLinks（chunk 位置に応じて 1 ソース最大 6 件 pick・URL 重複排除済み）
 
 ## 典型的なワークフロー
 
