@@ -168,6 +168,7 @@ curl "https://app.snorbe.deskrex.ai/api/v1/agent/run/clxxx001" \
 |---|---|
 | `status` | 実行ステータス |
 | `process` | **全イベントのタイムライン**（`config`・`delta`・`step`・`browse-*`・`plan`・`source-summary-*`・`graph-*` 等すべて） |
+| `images` | process から抽出した画像配列（重複排除済み）。search 画像 SERP / skill 出力ファイル / ソース要約の bodyLinks 画像を統合 |
 | `linkedSources` | エージェントが参照したソース（bodyLinks 含む） |
 | `linkedEntities` | エージェントが抽出・参照したエンティティ |
 | `agent` | エージェント情報 |

@@ -76,6 +76,10 @@ curl "https://app.snorbe.deskrex.ai/api/v1/agent/list" \
 | エンティティ詳細 | `GET /graph/entity/{entityId}` | [reference/graph.md](reference/graph.md) |
 | ソース詳細 | `GET /graph/source/{sourceId}` | [reference/graph.md](reference/graph.md) |
 
+### 画像データの取得
+
+`/turn/list` と `/agent/run/{runId}` の返値には `images: SearchImageItem[]` が含まれ、エージェント実行で収集した画像（検索画像 SERP・スキル成果物・ソース要約の bodyLinks）にアクセスできる。詳細は [recipes/image-retrieval.md](recipes/image-retrieval.md) を参照。
+
 ## モデル選択
 
 `POST /agent/run` / `POST /agent/run/stream` の `modelName` は **必須**。原則 **推奨モデル** を明示指定する。

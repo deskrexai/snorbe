@@ -57,6 +57,14 @@ curl "https://app.snorbe.deskrex.ai/api/v1/turn/list?limit=10" \
           { "type": "delta", "deltaText": "..." },
           { "type": "step", "status": "complete", "finishReason": "stop" }
         ],
+        "images": [
+          {
+            "imageUrl": "https://example.com/photo-1.jpg",
+            "thumbnailUrl": "https://example.com/thumb-1.jpg",
+            "title": "リチウムイオン電池の構造図",
+            "link": "https://example.com/article-1"
+          }
+        ],
         "publicSourceAgentRuns": [
           {
             "publicSource": {
@@ -78,6 +86,18 @@ curl "https://app.snorbe.deskrex.ai/api/v1/turn/list?limit=10" \
 ```
 
 `kind` の取りうる値: `"user"` / `"assistant"` / `"error"`
+
+### agentRun のレスポンスフィールド
+
+| フィールド | 型 | 説明 |
+|-----------|------|------|
+| `id` | `string` | AgentRun ID |
+| `status` | `string` | 実行ステータス（`"running"` / `"completed"` / `"failed"` / `"cancelled"`） |
+| `process` | `ProcessEvent[]` | SSE イベントの全タイムライン（`config`・`delta`・`step`・`browse-*` 等すべて） |
+| `images` | `SearchImageItem[]` | process から抽出した画像配列（重複排除済み）。search 画像 SERP / skill 出力ファイル / ソース要約の bodyLinks 画像を統合 |
+| `publicSourceAgentRuns` | `object[]` | エージェントが参照した公開ソース（URL + bodyLinks を含む） |
+| `privateSourceAgentRuns` | `object[]` | エージェントが参照した非公開ソース |
+| `agent` | `object` | エージェント情報（`id`・`name`） |
 
 ### agentRun.process に含まれるイベント
 
