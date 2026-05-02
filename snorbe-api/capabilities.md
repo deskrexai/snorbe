@@ -87,7 +87,7 @@ curl "https://app.snorbe.deskrex.ai/api/v1/skill/list" \
 下記はツール実装ファイル内の `xxxToolMeta` 定数から自動生成される。手動編集は不要で、各ツールファイル（例: `features/agent-run/api/tools/search-tool.ts`）の meta を更新し `pnpm gen:tool-list` を実行すれば再生成される。
 
 <!-- AUTOGEN:tool-catalog:START -->
-### research (6)
+### research (7)
 
 #### `search` — Web Search
 
@@ -126,6 +126,17 @@ Automate a browser for logins, complex interactions, and screenshot-based verifi
 `browse-start` / `browse-step` / `browse-ask-human` / `browse-final` / `browse-end`
 
 **Notes**: `browse-ask-human` 受信時は `/browser/answer-question` に回答。その後レジューム不要。スクリーンショット付き。
+
+#### `browse_harness` — Browser Harness
+
+Create or update reusable browser automation skills (harness). Live viewer available during execution.
+
+**Trigger**: スキルとして保存、繰り返し自動化、Live viewer で確認したい。
+
+**SSE events**:
+`browse-harness-start` / `browse-harness-step` / `browse-harness-final` / `browse-harness-end`
+
+**Notes**: browser-harness は bha-{host}-{slug} 形式でスキルを保存。done イベントで skill changes が DB に永続化される。
 
 #### `source_summary` — Source Summary
 
