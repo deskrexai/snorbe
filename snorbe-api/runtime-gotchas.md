@@ -218,7 +218,7 @@ def extract_json(text: str):
 
 - `modelName` は `AllModelNames` union 型で厳密。誤記（`gpt-4o` 単体など）は `400 BAD_REQUEST`
 - 正しい指定例: `gpt-5-mini-2025-08-07` / `claude-sonnet-4-6` / `gemini-3.1-pro`
-- 簡単: `snorbe-fast` / `snorbe-quality` を使えばワークスペース設定で自動選択
+- 簡単: `snorbe-fast` / `snorbe-medium` / `snorbe-quality` を使えばワークスペース設定で自動選択
 
 定義元: `snorbe-app/src/constants/llm-model.ts`
 

@@ -69,7 +69,7 @@ POST /api/v1/agent/run/stream/{runId}
 
 HITL 確認後にレジュームする際に使用。同じ SSE イベントが流れる。
 
-**⚠️ body は必須**: 空 body (`-d ''`) は `{"error":"Invalid JSON body"}`、空オブジェクト (`-d '{}'`) は `{"error":"Invalid option: expected one of snorbe-fast|snorbe-quality|…"}` となり、起動しない。**`modelName` / `promptKey` / `locale` の3点を原 run と同じ値で投げる**のが確実:
+**⚠️ body は必須**: 空 body (`-d ''`) は `{"error":"Invalid JSON body"}`、空オブジェクト (`-d '{}'`) は `{"error":"Invalid option: expected one of snorbe-fast|snorbe-medium|snorbe-quality|…"}` となり、起動しない。**`modelName` / `promptKey` / `locale` の3点を原 run と同じ値で投げる**のが確実:
 
 ```bash
 curl -N -s -X POST "https://app.snorbe.deskrex.ai/api/v1/agent/run/stream/$RUN_ID" \
