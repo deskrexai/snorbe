@@ -162,16 +162,16 @@ Discover related URLs from a site, deduplicated and trimmed.
 
 #### `recall` — Recall
 
-Retrieve prior knowledge from the workspace via similarity, knowledge-gap, opposition, or catalog recall.
+Retrieve prior knowledge from the workspace via similarity, knowledge-gap, opposition, connection, or catalog recall.
 
-**Trigger**: 「過去の」「前回の」「既存資料で」「反論」「反対意見」「批判的に」「デメリット」。
+**Trigger**: 「過去の」「前回の」「既存資料で」「反論」「反対意見」「批判的に」「デメリット」「繋がり」「共通点」「橋渡し」「どう関係していた」。
 
 **Inputs**: targetEntities[] で絞り込み可能。
 
-**Modes**: `similarity` / `knowledge_gap` / `opposition` / `catalog`
+**Modes**: `similarity` / `knowledge_gap` / `opposition` / `connection` / `catalog`
 
 **SSE events**:
-`rag-keyword-extraction-start` / `rag-keyword-extraction-complete` / `rag-entity-search-progress` / `rag-knowledge-gap-start` / `rag-knowledge-gap-progress` / `rag-knowledge-gap-complete` / `rag-knowledge-gap-merge` / `rag-catalog-recall-start` / `rag-catalog-recall-progress` / `rag-catalog-recall-complete` / `rag-catalog-recall-merge` / `rag-opposition-recall-start` / `rag-opposition-recall-progress` / `rag-opposition-recall-complete` / `rag-opposition-recall-merge` / `rag-source-pre-filter` / `rag-source-search-progress` / `rag-context-complete`
+`rag-keyword-extraction-start` / `rag-keyword-extraction-complete` / `rag-entity-search-progress` / `rag-knowledge-gap-start` / `rag-knowledge-gap-progress` / `rag-knowledge-gap-complete` / `rag-knowledge-gap-merge` / `rag-catalog-recall-start` / `rag-catalog-recall-progress` / `rag-catalog-recall-complete` / `rag-catalog-recall-merge` / `rag-opposition-recall-start` / `rag-opposition-recall-progress` / `rag-opposition-recall-complete` / `rag-opposition-recall-merge` / `rag-connection-recall-start` / `rag-connection-recall-progress` / `rag-connection-recall-complete` / `rag-connection-recall-merge` / `rag-source-pre-filter` / `rag-source-search-progress` / `rag-context-complete`
 
 ### generation (5)
 
