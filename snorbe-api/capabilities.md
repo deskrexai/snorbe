@@ -173,7 +173,7 @@ Retrieve prior knowledge from the workspace via similarity, knowledge-gap, oppos
 **SSE events**:
 `rag-keyword-extraction-start` / `rag-keyword-extraction-complete` / `rag-entity-search-progress` / `rag-knowledge-gap-start` / `rag-knowledge-gap-progress` / `rag-knowledge-gap-complete` / `rag-knowledge-gap-merge` / `rag-catalog-recall-start` / `rag-catalog-recall-progress` / `rag-catalog-recall-complete` / `rag-catalog-recall-merge` / `rag-opposition-recall-start` / `rag-opposition-recall-progress` / `rag-opposition-recall-complete` / `rag-opposition-recall-merge` / `rag-connection-recall-start` / `rag-connection-recall-progress` / `rag-connection-recall-complete` / `rag-connection-recall-merge` / `rag-source-pre-filter` / `rag-source-search-progress` / `rag-context-complete`
 
-### generation (5)
+### generation (6)
 
 #### `plan` — Plan
 
@@ -229,7 +229,26 @@ Generate or edit a matrix-style comparison table through a draft → confirmatio
 
 **Notes**: 外部 HITL 操作は `/agent/run/{runId}/matrix/answer` / `/confirm` を直接叩く必要がある（LLM 経由の専用ツールなし）。
 
-### hitl (12)
+#### `visual_map` — Visual Map
+
+Generate or edit a knowledge-graph axis map through a draft → confirmation → metadata fill flow.
+
+**Trigger**: 「マップ化して」「軸マップ」「3Dマップ」「可視化して」「散布図」「ビジュアルマップ」。
+
+**Modes**: `create` / `edit` / `continue`
+
+**Flow**:
+1. visualMapTool → first_visual_map_structure (axes + target entities + questions)
+2. regenerate / confirm / abort
+3. after confirm, metadata is filled via recall + search for each axis key
+4. GraphView saved → visual-map-data-completed
+
+**SSE events**:
+`first_visual_map_structure` / `regenerated_visual_map_structure` / `visual_map_structure_confirmed` / `visual_map_structure_rejected` / `visual_map_structure_draft_delta` / `visual_map_structure_draft_complete` / `user_answer_for_visual_map` / `visual_map_metadata_filling_delta` / `visual_map_metadata_filled_per_entity` / `visual-map-data-completed`
+
+**Notes**: 外部 HITL 操作は `/agent/run/{runId}/visual-map/answer` を直接叩く必要がある。
+
+### hitl (16)
 
 #### `regenerate_plan` — Regenerate Plan
 
@@ -279,6 +298,22 @@ Apply minor structural edits and immediately begin data extraction.
 
 Abort the current matrix workflow.
 
+#### `regenerate_visual_map_structure` — Regenerate Visual Map Structure
+
+Regenerate the visual map axis structure with user feedback.
+
+#### `confirm_visual_map_structure` — Confirm Visual Map Structure
+
+Confirm the visual map axis structure and begin metadata fill.
+
+#### `confirm_visual_map_structure_with_changes` — Confirm Visual Map Structure with Changes
+
+Apply minor axis edits and immediately begin metadata fill.
+
+#### `abort_visual_map` — Abort Visual Map
+
+Abort the current visual map workflow.
+
 ### agent_integration (3)
 
 #### `refresh_agent_memory` — Refresh Agent Memory
@@ -304,7 +339,7 @@ Invoke a workspace-enabled custom skill to extend agent capabilities.
 **SSE events**:
 `skill-delta` / `skill-complete` / `skill-error` / `skill-ask-secret` / `skill-session-start` / `skill-source-*`
 
-### internal (5)
+### internal (6)
 
 #### `answer_browser_question` — Answer Browser Question
 
@@ -338,6 +373,10 @@ Internal helper used by search to pick the most relevant SERP entries.
 #### `extract_matrix` — Extract Matrix
 
 Internal helper that extracts cell data from retrieved sources for a matrix row.
+
+#### `extract_visual_map_metadata` — Extract Visual Map Metadata
+
+Internal helper that fills entity metadata for confirmed visual map axis keys using recalled summaries.
 <!-- AUTOGEN:tool-catalog:END -->
 
 ## HITL 生成物の扱い方
