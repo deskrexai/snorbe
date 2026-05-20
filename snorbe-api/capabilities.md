@@ -376,7 +376,7 @@ Internal helper that extracts cell data from retrieved sources for a matrix row.
 
 #### `extract_visual_map_metadata` — Extract Visual Map Metadata
 
-Internal helper that fills entity metadata for confirmed visual map axis keys using recalled summaries.
+Internal helper that fills entity metadata for confirmed visual map axis keys using stage-2 LLM extraction from assembled research context.
 <!-- AUTOGEN:tool-catalog:END -->
 
 ## HITL 生成物の扱い方
