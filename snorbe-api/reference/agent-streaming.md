@@ -52,6 +52,7 @@ data: {"type":"complete","payload":{"runId":"clxxx001","text":"最終応答","fi
 | プラン（HITL） | `plan`・`plan-draft-delta`・`plan-draft-complete`・`plan-confirmed`・`plan-rejected` |
 | レポート（HITL） | `report-structure-draft-delta`・`report-structure-draft-complete`・`report_structure_confirmed`・`report_structure_rejected` |
 | マトリクス（HITL） | `matrix-structure-draft-delta`・`matrix-structure-draft-complete`・`matrix-data-preview`・`matrix-data-updated`・`matrix_structure_confirmed`・`matrix_structure_rejected` |
+| ビジュアルマップ（HITL） | `visual_map_structure_draft_delta`・`visual_map_structure_draft_complete`・`visual_map_structure_confirmed`・`visual_map_structure_rejected`・`visual_map_metadata_filling_delta`・`visual_map_metadata_filled_per_entity`・`visual-map-data-completed` |
 | ソース要約 | `source-summary-start`・`source-summary-delta`・`source-summary-item`・`source-summary-complete` |
 | グラフ抽出 | `graph-start`・`graph`・`graph-extraction-entity-delta` |
 
@@ -125,6 +126,16 @@ curl -N -s -X POST "https://app.snorbe.deskrex.ai/api/v1/agent/run/stream/$RUN_I
 3. マトリクス確定: POST /agent/run/{runId}/matrix/confirm
 ```
 
+### ビジュアルマップ確認フロー
+
+```
+1. ステータス確認 → pendingVisualMapDraft: true
+2. 質問に回答: POST /agent/run/{runId}/visual-map/answer
+3. ビジュアルマップ確定: POST /agent/run/{runId}/visual-map/confirm
+```
+
+`/visualmap` で起動した axis-map 構築フロー。 stage-1 LLM が 軸割り当て / 対象エンティティ / レイアウトを draft として提案 → 確定後に stage-2 LLM が各エンティティのメタデータを抽出して GraphView を保存する。 SSE では `visual_map_structure_draft_delta` → `visual_map_structure_draft_complete` （HITL ゲート） → confirm 後に `visual_map_structure_confirmed` → `visual_map_metadata_filling_delta` （per-entity × per-axis） → `visual_map_metadata_filled_per_entity` → `visual-map-data-completed` の順に流れる。
+
 ### HITL 共通パターン
 
 状態ごとの操作:
@@ -134,6 +145,7 @@ curl -N -s -X POST "https://app.snorbe.deskrex.ai/api/v1/agent/run/stream/$RUN_I
 | `pendingPlanDraft: true` | `POST /agent/run/{runId}/plan/answer` | `POST /agent/run/{runId}/plan/confirm` または `POST /agent/run/{runId}/plan/skip` | `POST /agent/run/stream/{runId}` |
 | `pendingReportDraft: true` | `POST /agent/run/{runId}/report/answer` | `POST /agent/run/{runId}/report/confirm` | `POST /agent/run/stream/{runId}` |
 | `pendingMatrixDraft: true` | `POST /agent/run/{runId}/matrix/answer` | `POST /agent/run/{runId}/matrix/confirm` | `POST /agent/run/stream/{runId}` |
+| `pendingVisualMapDraft: true` | `POST /agent/run/{runId}/visual-map/answer` | `POST /agent/run/{runId}/visual-map/confirm` | `POST /agent/run/stream/{runId}` |
 | `skillState.pendingSecretKeys` あり | 不足キーを `POST /secret` で登録 | 不要 | 通常は不要 |
 
 skill が secret を要求した場合:
@@ -160,7 +172,7 @@ curl -X POST "https://app.snorbe.deskrex.ai/api/v1/secret" \
 
 secret 登録は待機中の skill に通知されるため、通常は `/agent/run/stream/{runId}` を呼び直さない。
 
-`/answer` のボディは plan / report / matrix で共通:
+`/answer` のボディは plan / report / matrix / visual-map で共通:
 
 ```json
 {

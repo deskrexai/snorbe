@@ -381,7 +381,7 @@ Internal helper that fills entity metadata for confirmed visual map axis keys us
 
 ## HITL 生成物の扱い方
 
-`plan`・`report`・`matrix` は **ドラフト → ユーザー確認 → 本実行** の2段構え。
+`plan`・`report`・`matrix`・`visual-map` は **ドラフト → ユーザー確認 → 本実行** の2段構え。
 
 ### HITL エンドポイント
 
@@ -394,6 +394,8 @@ Internal helper that fills entity metadata for confirmed visual map axis keys us
 | レポート確定 | `POST /agent/run/{runId}/report/confirm` |
 | マトリクス質問に回答 | `POST /agent/run/{runId}/matrix/answer` |
 | マトリクス確定 | `POST /agent/run/{runId}/matrix/confirm` |
+| ビジュアルマップ質問に回答 | `POST /agent/run/{runId}/visual-map/answer` |
+| ビジュアルマップ確定 | `POST /agent/run/{runId}/visual-map/confirm` |
 
 確定後は `POST /agent/run/stream/{runId}` または `/agent/run/{runId}/resume` で本実行を再開。
 
@@ -403,9 +405,11 @@ SSE 受信中に以下のパターンを見たら HITL 待ち:
 - `step.pendingPlanDraft: true` → plan 待ち
 - `step.pendingReportDraft: true` → report 待ち
 - `step.pendingMatrixDraft: true` → matrix 待ち
+- `step.pendingVisualMapDraft: true` → visual-map 待ち
 - `first-plan` / `plan-draft-complete` → plan ドラフト完成
 - `first_report_structure` / `report-structure-draft-complete` → report 構造完成
 - `first_matrix_structure` / `matrix-structure-draft-complete` → matrix 構造完成
+- `visual_map_structure_draft_complete` → visual-map ドラフト完成
 
 ## promptKey（34種）
 
