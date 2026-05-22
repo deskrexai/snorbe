@@ -154,6 +154,61 @@ SSE 受信中に以下のイベントを見たら必ず対応:
 
 Snorbe 側で `title` / `detail` というキーは無いので、step を表示したいときは `objective` を見る。
 
+### **plan / matrix event 発火時の resume 手順 (HITL 再開 API)**
+
+`first-plan` や `plan-draft-complete` / `first_matrix_structure` などの HITL event を受信したら、SSE は **その時点で stop** する (= curl 接続が閉じる)。続行するには明示的に resume API を叩く:
+
+```bash
+# 1. answer (optional): plan に追記・修正したい内容があれば渡す
+curl -X POST "$BASE/agent/run/$RUN_ID/plan/answer" \
+  -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  -d '{"runId":"'$RUN_ID'","answer":"<plan に対する修正・追記>","modelName":"snorbe-fast"}'
+
+# 2. confirm: plan を確定 (またはそのまま受諾)
+curl -X POST "$BASE/agent/run/$RUN_ID/plan/confirm" \
+  -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  -d '{"runId":"'$RUN_ID'"}'
+
+# 3. resume: 本実行を SSE で再開 (新 curl 接続)
+curl -N -s -X POST "$BASE/agent/run/stream/$RUN_ID" \
+  -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
+  -d '{"modelName":"snorbe-fast","promptKey":"chat-routing","locale":"ja"}'
+```
+
+resume の body は **必須**: 空 `-d ''` は `Invalid JSON body`、空 `{}` は modelName 等の必須項目欠落で 400。**原 run と同じ modelName / promptKey / locale の 3 点を明示** ([reference/agent-streaming.md L73-85](reference/agent-streaming.md))。
+
+`matrix` / `report` / `visual-map` も同形 (`/agent/run/$RUN_ID/{type}/answer` + `/confirm` → `/agent/run/stream/$RUN_ID` resume)。
+
+### **plan event 非発火 + 「計画立てる」文言 stop 事故 (≠ HITL)**
+
+これは上記 HITL とは**別物**。エージェントが reasoning 不足で「計画を立てる必要があります」「次にやるべきことは...」のテキストだけ返して complete し、実際のマトリクス出力をスキップする事故。
+
+**症状**:
+- `complete` event は来るが `text` が **200-500 字** (= 通常 3000+ 字の本文より明確に短い)
+- ログ全体で `plan` 系 event は **0 件** (= HITL に分岐していない)
+- text 末尾が「次にやるべきことは X です」「計画を立ててから進めましょう」等で中断
+
+**原因**:
+- 入力が大規模 (claim 細目 30+ × 候補 6 等) で fast モデルが reasoning 不足
+- inputText が「計画を立ててから...」の語彙を誘発 (= chat-routing で「これは計画必要案件」と判定するが HITL までは行かない)
+
+**対処** (優先順):
+1. **snorbe-quality でリトライ** — reasoning model が 1-shot で完走する確率が高い (10-30 分かかる)
+2. **inputText 冒頭に強制指示**:
+   ```
+   **強制指示**: 計画ツール (plan-creation) 発火禁止、HITL 質問返し禁止、
+   ツール選択は 1-shot chat-routing 限定、最終応答は必ず <成果物> をその場で
+   出力すること。「計画を立てる必要があります」「次にやるべきことは...」のような
+   plan 文言で stop した場合は不適合とみなす。
+   ```
+3. **input 分割** — 30+ 細目を一気に投げず、3-5 グループに分割して個別ラン
+4. **HITL 経由を強制** — `/plan` を明示誘発する語彙を inputText に入れて plan event 発火させる → 上記 HITL resume 手順で続行 (= 結果的に大規模タスクをこなせる場合がある)
+
+**事例 (2026-05-21 WO2019/122291)**:
+- snorbe-fast で claim 細目 47 個 (独立 10 件 × 平均 5 細目) を 1-shot 投入 → complete.text 211 字 (「計画立てる必要」) で stop、plan event 0 件
+- snorbe-quality + 上記強制指示 で再ラン → 14.1MB ログ / delta 2639 件で完走、最終 text 5725 字 (6 候補 × 47 細目マトリクス完全)
+
 ## `maxBrowsingSteps` の実用値
 
 デフォルトは低めに設定されがち。実用的には:
