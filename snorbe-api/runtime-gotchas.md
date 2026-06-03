@@ -87,7 +87,7 @@ SSE は逐次イベントが来るので、HTTP レベルで長時間コネク�
 - `curl --max-time 300` で明示的に指定（`0` で無制限だが推奨しない）
 - Python `requests` の `timeout` は SSE では「次のバイトが来るまでのタイムアウト」として機能する
 
-SSE が途切れたら `POST /agent/run/stream/{runId}` でレジューム可能。
+SSE が途切れたら再接続が必要になるが、**無条件に `POST /agent/run/stream/{runId}` を再POSTしてはいけない**（詳細は下記「resume 多重起動を防ぐ手順」）。
 
 ## レート制限（100 req/min）
 
@@ -117,6 +117,58 @@ SSE 受信中に以下のイベントを見たら必ず対応:
 
 確認後、`/agent/run/stream/{runId}` でレジュームして本実行を走らせる。
 
+### resume 多重起動を防ぐ手順（重要）
+
+**背景**: SSE が長い run で複数回切れ、その都度 resume を再POST すると、**サーバ側で同一 run の実行が並走**する。これにより finalize がレースし、`completed` が HITL の `pending` 状態を上書きしてレポート構成案ドラフトが確認されないまま孤立する障害が実際に発生した。
+
+**サーバの現在の挙動（修正後）**:
+- クライアント（curl）が切断すると、その resume 実行を **abort（中断）** する。
+- 同一 run に新しい resume が来たら、**進行中の旧実行を中断してから差し替える（cancel-and-replace）**。
+- finalize は DB の権威状態で `pending` を再判定するため、盲目的な並走が `completed` で上書きすることはできない。
+
+ただし上記はあくまで「最悪の事態を防ぐ安全網」であり、呼び出し側も安全な手順を守ること。
+
+**安全な resume 手順**:
+
+1. **SSE が切れたらまず status を確認する**（resume は即座に叩かない）。
+
+   ```bash
+   curl "https://app.snorbe.deskrex.ai/api/v1/agent/run/$RUN_ID/status" \
+     -H "Authorization: Bearer $KEY"
+   ```
+
+2. **status に応じて判断する**:
+
+   | `status` 値 | 意味 | 対応 |
+   |---|---|---|
+   | `running` | サーバが実行継続中 | **resume を再POSTしない**。実行を中断させる恐れがある |
+   | `pending` / `pendingPlanDraft:true` 等 | HITL 待ち | confirm/answer → resume の手順へ進む |
+   | `completed` | 完了済み | resume 不要。`/turn/list` で結果を回収 |
+   | `error` | エラー終了 | 原因を確認してから再投入 |
+
+3. **1 run に対して resume を同時並行で複数発行しない**（1 run 1 resume を厳守）。
+
+4. **report HITL 待ちのパターン**（`complete` イベントが来たが `text: ""`）:
+   - `GET /agent/run/{runId}/status` で `pendingReportDraft: true` を確認
+   - `/report/confirm` でレポート構成を確定
+   - その後に resume を1回だけ POST
+
+```bash
+# ✅ 安全な resume の前に必ず status を確認
+STATUS=$(curl -s "https://app.snorbe.deskrex.ai/api/v1/agent/run/$RUN_ID/status" \
+  -H "Authorization: Bearer $KEY" | python3 -c "import sys,json; print(json.load(sys.stdin)['status'])")
+
+# running のまま → 再接続せず待つ
+if [ "$STATUS" = "running" ]; then
+  echo "サーバ実行中。再POSTしない。"
+# pending 系 → confirm 後に resume
+elif echo "$STATUS" | grep -qi "pending"; then
+  echo "HITL 待ち。confirm → resume の手順へ。"
+fi
+```
+
+> **注意**: resume を再POST すると、進行中の旧実行が中断される（cancel-and-replace）。`running` 中の resume 再POSTは作業の中断・やり直しを引き起こす。
+
 ### plan → report の **連鎖 HITL**（要注意）
 
 複雑なマルチステップ要求（「カテゴリ×列×国で網羅的に棚卸し」「指定マーカーで2ファイル分ける」「セクションごとに…」等）を投げると、**plan を確定した直後に今度は report までもう一段 HITL に入る**ことが頻繁にある。以下のパターンで詰まる:
@@ -126,7 +178,7 @@ SSE 受信中に以下のイベントを見たら必ず対応:
 3. `/report/confirm` を叩かないと **最終本文が `complete` の `text` に載らない**（代わりに `report_section_*` と `report_complete` で配信される）
 4. さらに resume するまで報告本文生成は始まらない
 
-> 「complete イベントは来たが `text: ""`」という現象は、ほぼ report HITL 待ちで止まっているサイン。`GET /agent/run/{runId}/status` で `pendingReportDraft: true` を確認し、`/report/confirm` → resume をもう1巡する。
+> 「complete イベントは来たが `text: ""`」という現象は、ほぼ report HITL 待ちで止まっているサイン。`GET /agent/run/{runId}/status` で `pendingReportDraft: true` を確認し、`/report/confirm` → resume をもう1巡する。**resume 前には必ず status が `pending` 系であることを確認してから1回だけ POST すること**（多重起動防止手順参照）。
 
 **plan / report を一切使わせたくない場合**は、inputText から「レポート」「セクション構成」「棚卸し」のような HITL トリガー語を消し、「以下の形式のマークダウンだけを返してください。他の処理は不要」と直接的に書くと、chat-routing が直接応答ツール（delta のみ）を選びやすい。ただし厳密には防げないので、スクリプト側は plan / report の両方を検出・自動 confirm するロジックを入れておくのが無難。
 

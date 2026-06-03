@@ -81,7 +81,20 @@ curl -N -s -X POST "https://app.snorbe.deskrex.ai/api/v1/agent/run/stream/$RUN_I
   -d '{"modelName":"snorbe-quality","promptKey":"chat-routing","locale":"ja"}'
 ```
 
-**何度でもレジュームできる**。クライアント側が切断・タイムアウトしても、サーバー側が `status: running` のままなら再接続可能。`GET /agent/run/{runId}/status` で `status: running` / `pending*Draft: false` を確認してから叩く。レジューム後は SSE が `run-start` / `step` / `rag-*` / `delta` / `complete` の順に再び流れる（step index が途中再生されることがある点に注意）。
+**⚠️ resume は無条件に安全ではない。** SSE が切れても即座に再POST せず、必ず `GET /agent/run/{runId}/status` で状態を確認してから1回だけ POST する。
+
+| `status` 値 | resume を叩いてよいか |
+|---|---|
+| `running` | **叩かない**。実行中の処理を中断させる（cancel-and-replace） |
+| `pending` / `pendingPlanDraft:true` 等 | confirm/answer の後に1回だけ叩く |
+| `completed` | resume 不要。`/turn/list` で結果を回収 |
+| `error` | 原因確認後に再投入 |
+
+**1 run に対して resume を同時並行で複数発行しない**（1 run 1 resume）。サーバは新しい resume が来ると進行中の旧実行を中断して差し替える（cancel-and-replace）。また、クライアントが切断した時点でその resume 実行は abort される。
+
+`GET /agent/run/{runId}/status` が `pending*Draft: true` の場合は confirm → resume の手順を踏む（[runtime-gotchas.md#resume-多重起動を防ぐ手順重要](../runtime-gotchas.md#resume-多重起動を防ぐ手順重要) 参照）。
+
+レジューム後は SSE が `run-start` / `step` / `rag-*` / `delta` / `complete` の順に再び流れる（step index が途中再生されることがある点に注意）。
 
 ### Agent 間メンション連鎖
 
