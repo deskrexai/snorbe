@@ -314,13 +314,19 @@ Apply minor axis edits and immediately begin metadata fill.
 
 Abort the current visual map workflow.
 
-### agent_integration (3)
+### agent_integration (4)
 
 #### `refresh_agent_memory` — Refresh Agent Memory
 
 Update the agent's durable memory with insights from the current conversation.
 
 **Notes**: エージェントの durable 記憶を明示更新（会話から得た洞察を永続化）。
+
+#### `schedule_task` — Schedule Task
+
+Register a recurring or one-time scheduled task and immediately run the first execution.
+
+**Notes**: Distills the user's scheduling request into a reusable imperative instruction, registers the automation, and executes the first run immediately.
 
 #### `mention_agent` — Mention Agent
 
