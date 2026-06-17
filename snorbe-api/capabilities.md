@@ -471,6 +471,19 @@ curl "https://app.snorbe.deskrex.ai/api/v1/agent/models"
 
 軽量ステータスのみ欲しい場合は `GET /agent/run/{runId}/status`（`pending*Draft` フラグ + `status` のみ、`process` 含まず）。
 
+### 結果のエクスポート（Markdown / PDF / JSON）
+
+ラン完了後の結果を**UIのコピー/PDFダウンロードと完全に同じカスタマイズ性**でエクスポートするには `POST /agent/run/{runId}/export` を使う。`/turn/list` で `process` を取り出して自前で Markdown/PDF を組み立てるのではなく、こちらに任せれば UI と bit 一致した出力が得られる。
+
+- `format`: `"md" | "pdf" | "json"` — 必須
+- `selections`: `Record<string, boolean>` — UI の `CopySelections` と同形。`response` / `plan` / `process` / `sourceTitles` / `sourceSummaries` / `sourceBodies` / `reportStructure` / `report` / `reportSections` / `reportCitations` / `images` / `domainStatistics` のキーと、動的キー `report_section:{sectionId}`
+- `locale`: `"ja" | "en"` — 見出し・ラベルの言語
+- `filename`: `string | null` — 拡張子は自動補完
+
+format ごとに `Content-Type` が変わり、`md` / `pdf` は `Content-Disposition: attachment; filename="..."` が付与される。`json` は markdown + 構造化素材（process / sources / images / domainStatistics）を1つの object で返すため、後段で LLM に渡したり別のドキュメントを組み立てたりするのに便利。
+
+詳細は [reference/agent-export.md](reference/agent-export.md)、典型ワークフローは [recipes/export-run.md](recipes/export-run.md) を参照。
+
 ## グラフ取得
 
 実行のたびに `extract_graph` が自動でエンティティ・関係を抽出・永続化するので、`GET /graph/*` で参照できる:

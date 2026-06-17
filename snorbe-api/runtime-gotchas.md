@@ -306,6 +306,24 @@ for turn in resp.json()["turns"]:
 
 **特定の `runId` を探すには降順ページング**（`?cursor=...` で次ページ）。直接指定エンドポイントは未提供。
 
+## エクスポート（`/agent/run/{runId}/export`）の落とし穴
+
+### ❌ `status: "running"` の途中で export を叩く
+
+`process` がまだ DB に書ききっていない時点で export を叩くと、部分的な内容しか含まれない PDF / Markdown が返る。**`GET /agent/run/{runId}/status` で `completed` を確認してから export する**。SSE で `step.status === "complete"` を見ているなら、そのあと数百 ms 待ってから叩くのが安全（agent-event Turn の書き込みが非同期に走る）。
+
+### PDF はサーバー側 base64 化のため `md` / `json` より重い
+
+`format: "pdf"` のときだけ、サーバーは process から画像 URL を抽出して上限 50 枚まで fetch + base64 化する。1 リクエストあたり数秒〜十数秒かかる可能性。MD/JSON は base64 化を skip するので軽い。Cloud Run timeout（600s）の範囲内には収まるが、CI 等の短い timeout を持つクライアントから叩くときは余裕を取る。
+
+### `filename` のヘッダ injection 対策はサーバー側で行う
+
+`filename` パラメータに CRLF / `"` / `\` が混入していても、サーバーは `Content-Disposition` に書く前に sanitize する。クライアント側で escape する必要はない（が、安全のため動的入力に怪しい文字を含めない設計を推奨）。
+
+### selections に何も `true` が無いと空 PDF/MD が返る
+
+`selections: {}` で叩くと、選択セクションがゼロなので**空または最小のドキュメント**が返る。最低 1 つは `true` にする。何を選べば良いか分からないときは UI 互換のデフォルト `{"response": true, "report": true, "images": true, "domainStatistics": true}` を使う。
+
 ## JSON 抽出の堅牢化
 
 エージェントが `\`\`\`json` ブロックで囲んだ出力を返すとき、たまにコードブロック外に前置きが入る。パースはこうする:
