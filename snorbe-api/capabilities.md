@@ -324,9 +324,9 @@ Update the agent's durable memory with insights from the current conversation.
 
 #### `schedule_task` — Schedule Task
 
-Register a recurring or one-time scheduled task and immediately run the first execution.
+Register a recurring or one-time scheduled task. First run fires automatically via Cloud Scheduler (within ~1 minute when in_one_minute is chosen).
 
-**Notes**: Distills the user's scheduling request into a reusable imperative instruction, registers the automation, and executes the first run immediately.
+**Notes**: Distills the user's scheduling request into a reusable imperative instruction and registers the automation. Cloud Scheduler picks up the row at the chosen scheduledAt (within ~1 minute when in_one_minute is selected).
 
 #### `mention_agent` — Mention Agent
 
