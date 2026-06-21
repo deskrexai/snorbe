@@ -196,6 +196,10 @@ secret 登録は待機中の skill に通知されるため、通常は `/agent/
 }
 ```
 
+**⚠️ `modelName` は必須**。欠落すると 400 で 150 個以上の有効 model 名を列挙する超長文 validation error が返る。**多くのクライアント実装はこのエラーを見逃して `/confirm` に進んでしまい、agent は HITL 回答待ちのまま30 分後に静かに `status: failed` に落ちる**（`/agent/run/{runId}` を取得しても `error` は空）。`modelName` は **`/agent/run/stream` で起動した原 run と同じ値**を使うのが確実。詳細と検知方法は [runtime-gotchas.md#️-answer-の-modelname-欠落で-run-が静かに-failed-になる事故](../runtime-gotchas.md) 参照。
+
+成功時は `200 OK` で `{"message":"計画を改善しました（X回目の更新）。新しい質問に回答してください。","status":"drafting"}` が返る。**レスポンス body の `status` が `drafting` または `confirmed` であることを必ず確認してから次のステップに進む**こと。
+
 `fileUrls` は任意。添付がない場合は省略する。
 
 `/confirm` と `/skip` のボディ:

@@ -117,6 +117,68 @@ SSE 受信中に以下のイベントを見たら必ず対応:
 
 確認後、`/agent/run/stream/{runId}` でレジュームして本実行を走らせる。
 
+### ⚠️ `/answer` の `modelName` 欠落で run が静かに `failed` になる事故
+
+**症状**: `/plan/answer`（または `/report/answer` 等）を `modelName` 抜きで叩くと、レスポンスは 400 で巨大な validation error が返る（**150 個以上の有効な model 名を列挙する超長文エラー**）。
+
+```bash
+# ❌ NG: modelName を抜いた answer
+curl -s -X POST "https://app.snorbe.deskrex.ai/api/v1/agent/run/$RUN_ID/plan/answer" \
+  -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  -d '{"runId":"'$RUN_ID'","answer":"主読者は…"}'
+# → 400 BAD_REQUEST: "modelName": ["Invalid option: expected one of \"snorbe-fast\"|\"snorbe-medium\"|..."]
+```
+
+ここで**多くのクライアント実装はエラーを見逃して `/plan/confirm` に進んでしまう**。confirm は `"status":"confirmed"` を返し、status は `running` に遷移するので、見かけ上は成功して見える。
+
+**しかしユーザー回答は一切保存されておらず**、agent は HITL 回答待ちのまま延々と何もしない step を回し、最終的に **約30分後に何のエラーメッセージもないまま `status: "failed"` に遷移**する。`/agent/run/{runId}` を取得しても `error` / `errorMessage` / `failureReason` はすべて空。
+
+**症状の特徴**:
+
+- run は `failed` だが、`/agent/run/{runId}` の `process` には `config` → `first_plan` → `step (plan call)` → `plan_confirmed` → `step (empty)` の 5 件しか残らない
+- `step` の `usage` は空、`text` も空、`toolCalls` には plan 確定の呼び出しだけが残る
+- なぜ落ちたかが APIレスポンスからは判別不能
+
+**正しい answer**:
+
+```bash
+# ✅ OK: modelName / runId / answer の3点を揃える
+curl -s -X POST "https://app.snorbe.deskrex.ai/api/v1/agent/run/$RUN_ID/plan/answer" \
+  -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  -d '{
+    "runId": "'"$RUN_ID"'",
+    "answer": "主読者は…（修正・追記内容）",
+    "modelName": "snorbe-quality"
+  }'
+# → 200 OK: {"message":"計画を改善しました（1回目の更新）。新しい質問に回答してください。","status":"drafting"}
+```
+
+**modelName は原 run と同じ値**を渡す（`/agent/run/stream` 起動時に指定したもの）。値が違うと validation error。
+
+**呼び出し側の対策**:
+
+1. `/answer` / `/confirm` / `/skip` の各レスポンスを **必ず HTTP status と body の `status` 両方で判定**する。`"status":"drafting"` または `"status":"confirmed"` 以外は失敗扱い
+2. 400 が返ったときは `confirm` に進む前にリトライ。`modelName` / `runId` 欠落を疑う
+3. 回答テキストを `/plan/answer` で保存できたかは、レスポンスの `message` フィールドで「計画を改善しました」「新しい質問に〜」が来たことで確認する
+
+### ⚠️ `/plan/confirm` 後の resume 忘れでも同じ「30分で `failed`」事故が起きる
+
+`/plan/answer` が正常に保存できても、**`/plan/confirm` の後に SSE を resume せず放置すると同じ症状になる**。`status: running` で 30 分待つと `failed` に落ち、`process` には `config` / `first_plan` / `step (plan)` / `user_answer_for_plan` / `regenerated_plan` / `plan_confirmed` / `step (空)` の7件だけ残る。
+
+**症状の見分け方** — process に `user_answer_for_plan` と `regenerated_plan` が含まれていれば answer は保存されている。それでも最後の step が空のままなら resume が叩かれていない。
+
+**原因**: HITL の確認エンドポイント（`/confirm`）はあくまで HITL ゲートを開けるだけで、実行を再開する責任を負わない。実行は SSE 接続（`/agent/run/stream/{runId}`）でのみ流れる。確認直後に **SSE を貼り直さないと、サーバ側はクライアント切断扱いで idle のまま timeout → failed** になる。
+
+**正しい流れ** (毎 HITL ごとに必須):
+
+```
+1. SSE drop → 2. status 確認 → 3. /plan/answer (modelName 必須) → 4. /plan/confirm
+→ 5. /agent/run/stream/{runId} で resume (modelName/promptKey/locale 必須)
+→ 6. 次の HITL or complete を SSE で待つ
+```
+
+**SSE を長時間生かす実装メモ**: Bash + curl で実装する場合、親シェルが先に exit すると `&` でバックグラウンド化した curl も SIGHUP で殺されることがある。`nohup curl ... < /dev/null > log 2> err &; disown` で完全に detach するか、`setsid` で新しいプロセスグループに分けると確実。`--max-time` を長めに（例 1800〜3600 秒）。
+
 ### resume 多重起動を防ぐ手順（重要）
 
 **背景**: SSE が長い run で複数回切れ、その都度 resume を再POST すると、**サーバ側で同一 run の実行が並走**する。これにより finalize がレースし、`completed` が HITL の `pending` 状態を上書きしてレポート構成案ドラフトが確認されないまま孤立する障害が実際に発生した。
