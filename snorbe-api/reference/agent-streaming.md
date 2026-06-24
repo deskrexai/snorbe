@@ -1,5 +1,30 @@
 # SSE ストリーミング実行と HITL
 
+## トランスポート — Web UI (snorbe-app) と CLI / REST API の対応
+
+snorbe-app の Web UI から起動するエージェントも、本 REST API から起動するエージェントも、**サーバー内部の実行関数 (`createAgentRunStream` / `createResumeAgentRunStream`) は完全に同一**。違いはトランスポート層と認証だけで、ビジネスロジック・HITL ルール・cancel-and-replace の挙動・`modelName` 必須・タイムアウト（30 分 idle で `failed`）はすべて共通する。
+
+| 観点 | Web UI (snorbe-app) | CLI / 外部 REST API |
+|------|---------------------|--------------------|
+| 認証 | NextAuth セッション | Bearer API key |
+| トランスポート | tRPC + JSONL streaming（`httpBatchStreamLink`, `trpc-accept: application/jsonl`） | REST + SSE（`text/event-stream`） |
+| 起動エンドポイント | `agentRun.stream` (tRPC mutation) | `POST /api/v1/agent/run/stream` |
+| 同期実行 | `agentRun.execute` | `POST /api/v1/agent/run` |
+| resume | `agentRun.resumeStream` | `POST /api/v1/agent/run/stream/{runId}` |
+| HITL confirm | tRPC `agentRun.confirmPlan` 等 | `POST /api/v1/agent/run/{runId}/{type}/confirm` |
+| `entryPoint` | `"ui"` | `"external_api"` |
+| HITL `*-draft-complete` 後の挙動 | クライアントが自動で resume を購読し直す | 呼び出し側が明示的に `/agent/run/stream/{runId}` を POST する必要がある |
+| ストリーム終端の意味 | 同じ（HITL draft 完成または `complete` で終わる） | 同じ |
+
+**示唆**:
+- Web UI で発生するバグは CLI でも再現しうるし、その逆も成り立つ
+- 「confirm 後 30 分 idle で `failed` 落ち」も両者共通の現象（[runtime-gotchas.md#️-planconfirm-後の-resume-忘れでも同じ30分で-failed事故が起きる](../runtime-gotchas.md) 参照）
+- 認証経路が違うため、API key の権限制御は別経路でかかるが、エージェント本体の挙動は同じ
+
+REST 互換レイヤーの実装根拠: `src/app/api/v1/agent/run/stream/route.ts` のヘッダコメント（trpc-to-openapi が streaming をサポートしないため REST 用の互換ルートを別途用意している）。
+
+---
+
 ## POST /agent/run/stream
 
 SSE (Server-Sent Events) でエージェントをストリーミング実行。
