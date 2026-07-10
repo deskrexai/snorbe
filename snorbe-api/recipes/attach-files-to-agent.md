@@ -65,6 +65,8 @@ curl -s -X PUT "$SIGNED_URL" \
 echo "[upload] $FILE_NAME uploaded" >&2
 
 # ---- Step 3: commit ----
+# 注意: commit input schema は {id, fileName, bucketName, tempPath, finalPath} の 5 フィールド のみ.
+# prepare response の uploadId → id に rename、mimeType/sizeBytes は 渡さない.
 COMMIT_RESP=$(curl -s -X POST "$API_BASE/file/upload/commit" \
   -H "Authorization: Bearer $KEY" \
   -H "Content-Type: application/json" \
@@ -72,14 +74,13 @@ COMMIT_RESP=$(curl -s -X POST "$API_BASE/file/upload/commit" \
         --arg ws "$WORKSPACE_ID" \
         --arg uid "$UPLOAD_ID" \
         --arg fn "$FILE_NAME" \
-        --arg mt "$FILE_MIME" \
-        --argjson sz "$FILE_SIZE" \
         --arg bk "$BUCKET" \
         --arg tp "$TEMP_PATH" \
         --arg fp "$FINAL_PATH" \
-        '{workspaceId: $ws, uploads: [{uploadId: $uid, fileName: $fn, mimeType: $mt, sizeBytes: $sz, bucketName: $bk, tempPath: $tp, finalPath: $fp}]}')")
+        '{workspaceId: $ws, uploads: [{id: $uid, fileName: $fn, bucketName: $bk, tempPath: $tp, finalPath: $fp}]}')")
 
-FINAL_URL=$(echo "$COMMIT_RESP" | jq -r '.[0].url')
+# 注意: commit response の 最終 URL フィールド 名 は `signedUrl` (`url` ではない)
+FINAL_URL=$(echo "$COMMIT_RESP" | jq -r '.[0].signedUrl')
 echo "[commit] $FINAL_URL" >&2
 
 # ---- Step 4: エージェント 実行 (fileUrls 付き) ----
@@ -145,14 +146,14 @@ def upload_files(paths: list[Path]) -> list[str]:
             urllib.request.urlopen(req).read()  # 200 で成功
 
     # Step 3: commit
+    # 注意: commit input schema は {id, fileName, bucketName, tempPath, finalPath} の 5 フィールド のみ.
+    # prepare response の uploadId → id に rename、mimeType/sizeBytes/signedUploadUrl/expiresAt は 渡さない.
     commit_payload = {
         "workspaceId": WORKSPACE_ID,
         "uploads": [
             {
-                "uploadId": s["uploadId"],
+                "id": s["uploadId"],
                 "fileName": s["fileName"],
-                "mimeType": s["mimeType"],
-                "sizeBytes": s["sizeBytes"],
                 "bucketName": s["bucketName"],
                 "tempPath": s["tempPath"],
                 "finalPath": s["finalPath"],
@@ -161,7 +162,8 @@ def upload_files(paths: list[Path]) -> list[str]:
         ],
     }
     committed = _post("/file/upload/commit", commit_payload)
-    return [c["url"] for c in committed]
+    # 注意: commit response の 最終 URL フィールド 名 は `signedUrl` (`url` ではない)
+    return [c["signedUrl"] for c in committed]
 
 
 def _post(path: str, body: dict) -> dict:

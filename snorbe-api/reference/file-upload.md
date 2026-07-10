@@ -125,10 +125,8 @@ curl -X POST "https://app.snorbe.deskrex.ai/api/v1/file/upload/commit" \
     "workspaceId": "cmXXXXXXX",
     "uploads": [
       {
-        "uploadId": "clxxx001",
+        "id": "clxxx001",
         "fileName": "wave_patents.csv",
-        "mimeType": "text/csv",
-        "sizeBytes": 45678,
         "bucketName": "app-files",
         "tempPath": "temp/clxxx001/wave_patents.csv",
         "finalPath": "workspaces/cmXXXXXXX/uploads/clxxx001/wave_patents.csv"
@@ -137,7 +135,7 @@ curl -X POST "https://app.snorbe.deskrex.ai/api/v1/file/upload/commit" \
   }'
 ```
 
-`prepare` の レスポンス を そのまま `uploads` に 詰める。
+**フィールド 名の 注意**: `prepare` の レスポンス の `uploadId` は commit では **`id`** に rename して 渡す。`mimeType`/`sizeBytes`/`signedUploadUrl`/`expiresAt` は commit では 送らない (5 フィールド のみ)。
 
 ### レスポンス
 
@@ -146,12 +144,14 @@ curl -X POST "https://app.snorbe.deskrex.ai/api/v1/file/upload/commit" \
   {
     "uploadId": "clxxx001",
     "fileName": "wave_patents.csv",
-    "url": "https://xxxx.supabase.co/storage/v1/object/sign/app-files/workspaces/cmXXXXXXX/uploads/clxxx001/wave_patents.csv?token=..."
+    "signedUrl": "https://xxxx.supabase.co/storage/v1/object/sign/app-files/workspaces/cmXXXXXXX/uploads/clxxx001/wave_patents.csv?token=...",
+    "path": "workspaces/cmXXXXXXX/uploads/clxxx001/wave_patents.csv",
+    "bucketName": "app-files"
   }
 ]
 ```
 
-- 返された `url` を `POST /agent/run/stream` の `fileUrls: [url]` に セット
+- 返された `signedUrl` を `POST /agent/run/stream` の `fileUrls: [signedUrl]` に セット
 - URL 有効期限 は 7 日、期限切れ 後 は 再 commit or refresh 必要 (`referencedFileUrls` 経由 なら 自動 refresh される)
 - commit 失敗 は 主に「upload 未完了」or「tempPath に ファイル 無し」= 事前 に PUT が 200 で 完了 している ことを 確認
 
