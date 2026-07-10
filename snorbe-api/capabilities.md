@@ -458,6 +458,33 @@ curl "https://app.snorbe.deskrex.ai/api/v1/agent/models"
 
 定義元: `snorbe-app/src/constants/llm-model.ts`
 
+## ファイル添付 (fileUrls)
+
+`POST /agent/run/stream` / `POST /agent/run` は `fileUrls: string[]` を 最大 10 個 まで 受け付ける。エージェントは 添付ファイル を **一次資料** として 読み、`inputText` の 指示 と 突き合わせて 分析する (例: 「添付 CSV の 列 分布 を 要約」「PDF の 5 章 だけ 翻訳」等)。
+
+Web からしか 参照できない データ (Google Sheets/Notion/内部Wiki) を 分析させたい 場合、URL を `inputText` に 貼る より、**ローカル ファイル として export → `fileUrls` で 添付** の方が 安定 (ブラウザ アクセス 失敗 の リスク回避 + 抽出 品質)。
+
+### 対応 拡張子・サイズ
+
+| カテゴリ | 拡張子 | 上限サイズ |
+|---|---|---|
+| ドキュメント | `.pdf` `.doc` `.docx` `.csv` `.xlsx` `.xls` `.ppt` `.pptx` | 50MB |
+| プレーンテキスト | `.txt` `.html` `.md` `.xml` | 50MB |
+| 画像 | `.jpg` `.jpeg` `.png` | 5MB |
+| 音声 | `.webm` `.wav` `.mp3` `.m4a` `.opus` | 50MB |
+
+- 1 リクエスト あたり **最大 10 ファイル** (`fileUrls.max(10)`)
+- Private Source 経由 (`referencedFileUrls` / `referencedPrivateSourceIds`) は 別 max 20
+
+### 2-step upload flow
+
+1. **`POST /file/upload/prepare`** — fileName/mimeType/sizeBytes を 送信 → 各ファイル に `uploadId` + `signedUploadUrl` (24 時間 有効) + `finalPath` を 返却
+2. **`PUT <signedUploadUrl>`** — ファイル本体 を Supabase Storage に 直接 upload (バックエンド 経由 しない = 帯域節約)
+3. **`POST /file/upload/commit`** — uploadId 群 を 送信 → 権限確定 + `temp → final path` 移動 + 署名済 download URL (7 日 有効) 返却
+4. 得た URL を `POST /agent/run/stream` の `fileUrls: [<url1>, <url2>, ...]` に セット して 実行
+
+詳細な curl 例・パラメータ・エラー は [reference/file-upload.md](reference/file-upload.md)、完成 ワークフロー は [recipes/attach-files-to-agent.md](recipes/attach-files-to-agent.md) 参照。
+
 ## 事後取得（ラン完了後の詳細データ）
 
 エージェント実行後に詳細を回収する主要エンドポイントは `GET /turn/list`。

@@ -128,6 +128,12 @@ Report は `/report/answer` → `/report/confirm`、Matrix は `/matrix/answer` 
 
 ---
 
+## ローカル ファイル を 添付 して 分析させたい 場合
+
+`inputText` に URL を 貼って エージェント の browser で 開かせる より、**ローカル ファイル を upload → `fileUrls` で 添付** の方が 抽出品質・安定性 の 両面 で 有利 (Google Sheets の 制限公開・Notion 認証壁 等 の 回避、大きな CSV や PDF の 完全取得)。
+
+2-step upload flow (`/file/upload/prepare` → PUT → `/file/upload/commit` → `fileUrls: [url]`) の 完成ワークフロー (Bash + Python の 実例) は [recipes/attach-files-to-agent.md](attach-files-to-agent.md) 参照。
+
 ## 非ストリーミング実行（単純なクエリのみ）
 
 挨拶・要約など **ツール使用が明らかに無い短いクエリ** なら非ストリーミングでもOK。
