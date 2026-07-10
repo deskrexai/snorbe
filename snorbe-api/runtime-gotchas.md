@@ -231,6 +231,52 @@ fi
 
 > **注意**: resume を再POST すると、進行中の旧実行が中断される（cancel-and-replace）。`running` 中の resume 再POSTは作業の中断・やり直しを引き起こす。
 
+### `failed` / `cancelled` からの resume は「動くが決定論ではない」
+
+**実装事実**: `POST /agent/run/stream/{runId}` および `POST /agent/run/{runId}/resume` は **run の現在 status を一切チェックしない**。`failed` でも `cancelled` でも resume を叩けば実行される。サーバは以下を行う:
+
+1. Turn テーブルから event を全 replay して process を復元
+2. 過去の assistant 発話 + tool_result を全部 prompt に積み直す
+3. `status: running` に強制上書き
+4. LLM に「続きを打て」と促す
+
+つまり resume は **「エラーの続きから resume」ではなく「エラー直前の状態を復元 → LLM に続きを判断させる」**。ここは決定論ではない:
+
+- LLM は履歴を読み取り、`complete` で終わらせることも、別 tool を選び直すことも、同じ tool を再実行することもある
+- 復活する保証はないが、event-sourced 設計なので進捗を失わずに済むケースが多い
+
+**UI 側にはこの再開機能は露出していない**（Web UI の resume は HITL confirm 契機のみ）。API から使う場合の隠し機能に近い。
+
+**`failed` から resume するときの判定手順**:
+
+```bash
+# 直近 event を見て orphan か hard error かを見分ける
+curl -s ".../agent/run/$RUN_ID" -H "Authorization: Bearer $KEY" \
+  | jq '.process.events[-5:] | map(.type)'
+```
+
+| 直近 event の型 | 意味 | 対応 |
+|---|---|---|
+| `step` / `tool_result` / `search_*` / `browse_*` / `report_*` 系 | 途中まで進んで silent timeout (orphan recovery) | resume で復活期待できる |
+| `error` / `run-error` | ハードエラー（LLM auth・rate limit・provider outage 等） | resume しても同じ理由で落ちる可能性大。原因調査してから再投入 |
+| `config` のみ（step 0 件） | 起動直後に落ちた | resume しても意味薄い。原因調査 |
+
+**`cancelled` からの resume は原則 NG**:
+
+- `cancelled` はユーザーが明示的に cancel mutation を叩いた結果
+- resume で復活させるとユーザー意思の反映を破壊する
+- 例外: cancel-and-replace のレースで意図せず `cancelled` に落ちたケースだけ、意図的に resume する
+
+**resume で使うプロンプトの中身**（デバッグ時の参考）:
+
+- `inputText` は元の user turn（config event に保存）
+- 全 `step.text` + `step.toolCalls` が assistant message として順に再現
+- 全 `step.invokedTools` が tool_result message として順に再現
+- HITL confirm 済み情報（plan / report structure / matrix / visual map）は timeline から取り出して metadata に注入
+- 直近に rejection があれば "fallback message" が末尾に追記される
+
+**30 分 silent timeout の正体（重要な誤解を解く）**: サーバ側の `recoverOrphanedAgentRuns` は「`status=running` かつ 30 分以内に `agent-event` Turn が 0 件」の run を `failed` にマークするだけの background job。**エージェントが失敗したわけではなく、SSE 切断で idle 判定を食らっただけ**のケースが大半。だから resume で復帰することが多い。「30 分 failed = 実行不能」と早合点しない。
+
 ### plan → report の **連鎖 HITL**（要注意）
 
 複雑なマルチステップ要求（「カテゴリ×列×国で網羅的に棚卸し」「指定マーカーで2ファイル分ける」「セクションごとに…」等）を投げると、**plan を確定した直後に今度は report までもう一段 HITL に入る**ことが頻繁にある。以下のパターンで詰まる:
