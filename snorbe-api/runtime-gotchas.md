@@ -465,6 +465,64 @@ def extract_json(text: str):
 
 バッチ処理は**順次 + sleep(2-5)** が基本。並列化は本当に必要な場合だけ 3〜5 並列まで。
 
+### SSEが「詰まる」: run未生成のまま孤立turnが残るパターン
+
+**症状**: `POST /agent/run/stream` に inputText を送り、SSEイベントを待つが、`data:` 行が1つも返ってこない。タイムアウトで切断した後、`/turn/list` を見るとユーザーturnは記録されているが `agentRunId: null` — runが作成されていない。
+
+**確認方法**:
+```bash
+curl -s /turn/list?limit=3 | jq '.turns[] | {agentRunId, content: .content[:80]}'
+# agentRunId: null → runが作られていない孤立turn
+```
+
+**原因**: サーバー内部では15秒ごとのheartbeat (pingイベント) が `createStreamFromAgent` (L82-87) で**既に実装されている**。にもかかわらずクライアントに届かないのは、SSEレスポンスのバッファリング問題が最有力:
+
+1. クライアントがPOST → サーバーがturnをDB書き込み (即座に完了)
+2. `createSSEResponse` がReadableStreamを返す → `for await (event of stream)` で最初のyieldを待つ
+3. `createStreamFromAgent`内でheartbeat開始 + `executeAgentRun`が非同期で走る
+4. heartbeat (pingイベント30バイト) がqueueに入り、ReadableStreamの`controller.enqueue()`に渡される
+5. **しかし`sse-response.ts`に`X-Accel-Buffering: no`ヘッダーが未設定** → Cloud Run内部のenvoyプロキシや、Next.js standaloneのNode.jsランタイムが小さいchunkをバッファして即flushしない
+6. クライアント側にはバイトが1つも届かず、タイムアウトで切断
+7. 結果: turnあり、runなし (`agentRunId: null`)
+
+**補足: クレジット切れの場合** — creditチェック (execute-agent-run.ts L350-354) で不足なら `throw TRPCError("INSUFFICIENT_CREDITS")` → `queue.fail()` → SSEに `{"type":"error"}` が送出される設計。ただし上記のバッファリング問題でこのエラーイベント自体も届かない可能性がある。
+
+**発生しやすい条件**:
+- Cloud Run上で`X-Accel-Buffering: no`ヘッダーが未設定 (issue #2089で修正予定)
+- `--max-time` が短い (30秒以下) curlの場合
+- Python `requests.iter_lines` がバッファリングで詰まる環境 (background実行等)
+- 前処理のDB IO (credit確認、subscription解決等) がslow queryでハングする場合
+
+**対処 (クライアント側)**:
+- 孤立turnは放置して問題ない (課金されない、runが存在しないので30分failedにもならない)
+- 同じinputTextで**再POST**して新しいrunを作るしかない (現状の唯一の回復手段)
+- curlの`--max-time`を長めに設定 (300-600秒) で発生を減らせる
+- SSEが1イベントも来ない場合、**最低60秒は待つ** (初期化に時間がかかるケースがある)
+
+**やってはいけないこと**:
+- 孤立turnに対してresumeしようとする (runIdが存在しないので404になる)
+- 大量にリトライして孤立turnを増やす
+
+**なぜこうなっているか (意図的な設計)**: `executeAgentRun` (execute-agent-run.ts L423-424) のコメントに明記されている通り、AgentRunレコードは**前処理 (credit確認・ツール選択・プロンプト生成・モデル解決・turnヒストリ取得) が全部成功してから**作成される。理由は「前処理で失敗した場合に孤立AgentRunレコードを残さないため」。
+
+**重要: 15秒heartbeat (pingイベント) は `createStreamFromAgent` L82-87 で既に実装済み。** サーバー内部ではpingがqueueに入っている。問題はSSEレスポンスのバッファリングでこのpingがクライアントまで届かないこと。`sse-response.ts`に`X-Accel-Buffering: no`ヘッダーが未設定なのが最有力原因 (issue #2089)。
+
+**2026-07-19 実測**: プロンプトベストプラクティス調査とComfyUIレイヤー配置調査の2本で発生。どちらも120秒のタイムアウト内にSSEイベントが1つも来ず、turn/listに`agentRunId: null`のturnが残った。
+
+### SSE接続の安定性に関する全体像
+
+SSEが「詰まる」「切れる」「イベントが来ない」パターンのまとめ:
+
+| パターン | 症状 | 原因 | 対処 |
+|---|---|---|---|
+| **孤立turn** | turnあり、runなし (`agentRunId: null`) | heartbeatがバッファリングで届かず接続切断 (#2089) | 再POST |
+| **HITL未応答** | runはrunning/pending、text=0 | plan/report confirm待ち | confirm → resume |
+| **resume未実行** | confirm済みだがstepが増えない | UI/CLIがSSE resumeを貼っていない | API resume (#2082) |
+| **サイレントfailed** | 30分後にstatus=failed | SSE切断 → idle判定 → 自動failed | resume で復帰可 |
+| **Pythonバッファ** | HTTP 200だがdeltaが来ない | requests.iter_linesのバッファリング | curl subprocess に切替 |
+
+**推奨フロー**: SSEが2分以内に1イベントも来ない場合は接続を切り、`/turn/list` で最新turnの`agentRunId`を確認。nullなら再POST、runIdがあれば`/agent/run/{runId}/status`を確認してresumeまたは待機。
+
 ## デバッグ Tips
 
 1. まず `curl` で疎通確認（Python より確実）
@@ -472,3 +530,5 @@ def extract_json(text: str):
 3. `first-plan` 等の HITL イベントで停止 → confirm/answer 忘れ
 4. 結果が JSON パースできない → プロンプトで「他テキスト不要」を強く明示
 5. 途中で切断 → `runId` を保存、`/turn/list` で後日回収、または `/agent/run/stream/{runId}` でレジューム
+6. **turnはあるがrunIdがnull** → SSE接続がrun作成前に切れた孤立turn。再POSTする
+7. **SSEが完全に詰まる** → Tavily直接検索等にフォールバックして結果を回収する手もある
