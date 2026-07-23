@@ -179,6 +179,80 @@ curl -s -X POST "https://app.snorbe.deskrex.ai/api/v1/agent/run/$RUN_ID/plan/ans
 
 **SSE を長時間生かす実装メモ**: Bash + curl で実装する場合、親シェルが先に exit すると `&` でバックグラウンド化した curl も SIGHUP で殺されることがある。`nohup curl ... < /dev/null > log 2> err &; disown` で完全に detach するか、`setsid` で新しいプロセスグループに分けると確実。`--max-time` を長めに（例 1800〜3600 秒）。
 
+### ⚠️ `/{kind}/answer` の `status` を必ず分岐せよ — `drafting` で resume を叩くと run が永続 stuck する
+
+`/plan/answer` `/report/answer` `/matrix/answer` `/visual-map/answer` のレスポンス `status` は 3 値の enum。**この値を機械的に分岐しないクライアントは 100% の確率で「report は完成、plan は pending のまま」の永続 stuck 状態を引き起こす**（Issue #2103）。
+
+| `status` | 意味 | 次にすること (`nextAction` フィールドと一致) |
+|---|---|---|
+| `"drafting"` | LLM が `regenerate_*` を選択し、追加の質問を返した | **同じ answer エンドポイントを再度叩く** (`nextAction: "call_answer_again"`)。`newQuestion` に次の質問文が入っている。**resume を絶対に叩かない** |
+| `"confirmed"` | draft 確定 | `POST /agent/run/stream/{runId}` で resume 開始 (`nextAction: "call_resume_stream"`) |
+| `"rejected"` | draft 却下、run 終了 | resume 不可。新しい `POST /agent/run/stream` を起動 (`nextAction: "call_new_run"`) |
+
+**サーバ側の防御 (2026-07 以降)**: pending draft がある状態で `POST /agent/run/stream/{runId}` を叩くと `409 PRECONDITION_FAILED` が返る (`reason: "pending_plan_draft"` 等)。それ以前の `answer` 呼び出しで `status:"drafting"` を返しているはずなので、クライアントはそこで気付くべき。
+
+**過去のインシデント (Issue #2103)**: `status:"drafting"` を "OK, proceed" と誤読して resume を叩き、pending の 2 回目 plan draft を無視して research → report まで進行。結果 `status:"pending", pendingPlanDraft:true, pendingReportDraft:false` の永続 stuck 状態に陥り、report は完成しているのに ready にならない状態になった。復旧は `POST /agent/run/{runId}/plan/{confirm|skip}` で強制解除できる。
+
+**推奨ループ実装 (bash)**:
+
+```bash
+MAX_REGEN=5   # regenerate をこの回数まで許可 → 超えたら skip で強制確定
+ANSWER_TEXT="ユーザ回答"
+
+for i in $(seq 1 $MAX_REGEN); do
+  RESP=$(curl -s -X POST "https://app.snorbe.deskrex.ai/api/v1/agent/run/$RUN_ID/plan/answer" \
+    -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+    -d "{
+      \"runId\":\"$RUN_ID\",
+      \"answer\":\"$ANSWER_TEXT\",
+      \"modelName\":\"snorbe-quality\"
+    }")
+  STATUS=$(echo "$RESP" | jq -r .status)
+  NEXT=$(echo "$RESP" | jq -r .nextAction)
+
+  case "$NEXT" in
+    call_resume_stream)
+      echo "✓ Plan confirmed after $((i-1)) regenerations. Resuming SSE."
+      curl -N -X POST "https://app.snorbe.deskrex.ai/api/v1/agent/run/stream/$RUN_ID" \
+        -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+        -d '{"modelName":"snorbe-quality","promptKey":"chat-routing","locale":"ja"}'
+      break
+      ;;
+    call_answer_again)
+      NEW_Q=$(echo "$RESP" | jq -r .newQuestion)
+      echo "→ Regeneration #$i. Question: $NEW_Q"
+      # 次の回答を組み立てる（ユーザ入力を待つ / LLM に生成させる / 既定値で埋める 等）
+      ANSWER_TEXT="次の回答..."
+      ;;
+    call_new_run)
+      echo "✗ Plan rejected. Aborting."
+      exit 1
+      ;;
+    *)
+      echo "⚠ Unknown nextAction: $NEXT. Response: $RESP"
+      exit 2
+      ;;
+  esac
+done
+
+# MAX_REGEN 到達 → 現在の draft を強制確定して resume に進む
+if [ "$NEXT" = "call_answer_again" ]; then
+  echo "⚠ Reached MAX_REGEN, forcing confirm via /plan/skip"
+  curl -s -X POST "https://app.snorbe.deskrex.ai/api/v1/agent/run/$RUN_ID/plan/skip" \
+    -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+    -d "{\"runId\":\"$RUN_ID\"}"
+  # 次に resume
+fi
+```
+
+**同じパターンが `/report/answer` `/matrix/answer` `/visual-map/answer` にも適用される**。全て同一の `nextAction` 分岐で扱える。
+
+**回答ループの打ち切りショートカット**:
+- `POST /agent/run/{runId}/{kind}/skip` — 現 draft を "manually confirmed" 扱いにして次フェーズへ (回答不要)
+- `POST /agent/run/{runId}/{kind}/confirm` — 現 draft を明示的に承認 (回答不要、質問は無視)
+
+**古い実装からの移行**: 以前のレスポンスは `{status, message}` のみで、`message` の日本語文言 (「新しい質問に回答してください」) から分岐する必要があった。現在は `nextAction` / `newQuestion` / `regenerationCount` フィールドが追加されているので、message 依存の分岐は捨てて `nextAction` に切り替えること。
+
 ### resume 多重起動を防ぐ手順（重要）
 
 **背景**: SSE が長い run で複数回切れ、その都度 resume を再POST すると、**サーバ側で同一 run の実行が並走**する。これにより finalize がレースし、`completed` が HITL の `pending` 状態を上書きしてレポート構成案ドラフトが確認されないまま孤立する障害が実際に発生した。

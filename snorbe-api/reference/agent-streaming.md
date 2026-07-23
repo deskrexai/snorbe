@@ -117,6 +117,22 @@ curl -N -s -X POST "https://app.snorbe.deskrex.ai/api/v1/agent/run/stream/$RUN_I
 
 **1 run に対して resume を同時並行で複数発行しない**（1 run 1 resume）。サーバは新しい resume が来ると進行中の旧実行を中断して差し替える（cancel-and-replace）。また、クライアントが切断した時点でその resume 実行は abort される。
 
+**⚠️ pending draft がある状態で resume を叩くと 409 が返る**（2026-07 以降）。HITL draft が未確定のまま resume を叩いた場合、サーバは以下を返す:
+
+```json
+{
+  "error": "PRECONDITION_FAILED",
+  "reason": "pending_plan_draft",
+  "message": "Pending plan draft exists. Call POST /agent/run/{runId}/plan/{answer|confirm|skip} to resolve it before resuming.",
+  "pendingPlanDraft": true,
+  "pendingReportDraft": false,
+  "pendingMatrixDraft": false,
+  "pendingVisualMapDraft": false
+}
+```
+
+`reason` は `pending_plan_draft` / `pending_report_draft` / `pending_matrix_draft` / `pending_visual_map_draft` のいずれか。指示された endpoint (`/plan/answer` 等) で draft を確定してから resume を再試行する。**この 409 は client 側 status enum 分岐の抜けを検知するための最終セーフティネット** — 本来は `/{kind}/answer` の `nextAction` に従って分岐すれば発火しない (下記「HITL 共通パターン」参照)。
+
 `GET /agent/run/{runId}/status` が `pending*Draft: true` の場合は confirm → resume の手順を踏む（[runtime-gotchas.md#resume-多重起動を防ぐ手順重要](../runtime-gotchas.md#resume-多重起動を防ぐ手順重要) 参照）。
 
 レジューム後は SSE が `run-start` / `step` / `rag-*` / `delta` / `complete` の順に再び流れる（step index が途中再生されることがある点に注意）。
@@ -223,7 +239,31 @@ secret 登録は待機中の skill に通知されるため、通常は `/agent/
 
 **⚠️ `modelName` は必須**。欠落すると 400 で 150 個以上の有効 model 名を列挙する超長文 validation error が返る。**多くのクライアント実装はこのエラーを見逃して `/confirm` に進んでしまい、agent は HITL 回答待ちのまま30 分後に静かに `status: failed` に落ちる**（`/agent/run/{runId}` を取得しても `error` は空）。`modelName` は **`/agent/run/stream` で起動した原 run と同じ値**を使うのが確実。詳細と検知方法は [runtime-gotchas.md#️-answer-の-modelname-欠落で-run-が静かに-failed-になる事故](../runtime-gotchas.md) 参照。
 
-成功時は `200 OK` で `{"message":"計画を改善しました（X回目の更新）。新しい質問に回答してください。","status":"drafting"}` が返る。**レスポンス body の `status` が `drafting` または `confirmed` であることを必ず確認してから次のステップに進む**こと。
+成功時は `200 OK` で以下の shape が返る:
+
+```json
+{
+  "status": "drafting",
+  "message": "計画を改善しました（1回目の更新）。新しい質問に回答してください。",
+  "nextAction": "call_answer_again",
+  "newQuestion": "本研究の主要な対象読者と、必要な深さ（概要/専門/実装）を教えてください。",
+  "regenerationCount": 1
+}
+```
+
+**必ず `nextAction` (または最低でも `status`) で機械的に分岐すること**。3 状態は排他:
+
+| `status` | `nextAction` | 次にすること |
+|---|---|---|
+| `"drafting"` | `"call_answer_again"` | 同じ `/{kind}/answer` を再度叩く（`newQuestion` が次の質問文） |
+| `"confirmed"` | `"call_resume_stream"` | `POST /agent/run/stream/{runId}` で resume 開始 |
+| `"rejected"` | `"call_new_run"` | この run は終了。resume は不可、新規 run を起動 |
+
+**⚠️ `status:"drafting"` で `POST /agent/run/stream/{runId}` を叩くと 409 `PRECONDITION_FAILED` が返る**（`reason: "pending_plan_draft"` 等）。それ以前の答えを見落として resume に進んだサインなので、レスポンス body の `pendingPlanDraft` / `pendingReportDraft` / `pendingMatrixDraft` / `pendingVisualMapDraft` を見てもう一度 answer に戻ること。
+
+過去に「drafting を無視して resume を叩き、pending の 2 回目 plan draft が無視されて report まで進行 → status:"pending" のまま永続 stuck」というインシデントがあった（Issue #2103）。修正後の現状は 409 で弾かれるが、client 側で正しく `status` を分岐する実装は必ず入れておくこと。復旧が必要な run は `POST /agent/run/{runId}/{kind}/{confirm|skip}` で強制解除。
+
+**古い `{status, message}` だけを見る実装との互換**: `nextAction` は 2026-07 以降に追加された新フィールド。それ以前のフィールド (`status`, `message`) は変更なしで残っている。分岐実装は `nextAction` を優先し、無ければ `status` へフォールバックする形で書くと後方互換になる。
 
 `fileUrls` は任意。添付がない場合は省略する。
 
